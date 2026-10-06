@@ -20,6 +20,31 @@ st.set_page_config(
     layout="wide"
 )
 
+# Custom CSS to improve button text visibility & padding
+st.markdown("""
+<style>
+    /* Make buttons look like prominent KPI cards with clear multi-line text */
+    div.stButton > button {
+        width: 100%;
+        height: auto;
+        padding: 12px 10px;
+        background-color: #F8FAFC;
+        border: 1px solid #CBD5E1;
+        border-radius: 8px;
+        color: #1E293B;
+        font-weight: 600;
+        text-align: center;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        transition: all 0.2s ease-in-out;
+    }
+    div.stButton > button:hover {
+        background-color: #EFF6FF;
+        border-color: #3B82F6;
+        color: #1D4ED8;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("📊 Sales & Dispatch Analytics Dashboard")
 
 # ---------------------------------------------------------
@@ -508,9 +533,6 @@ if section == "📅 Month Wise & Date Filter":
         fig_comp.update_layout(barmode='group', title=f"Comparison: {label1} vs {label2}")
         st.plotly_chart(fig_comp, use_container_width=True)
 
-        # ---------------------------------------------------------
-        # AGGREGATED COMPARISONS (Sales Exec, Party-Wise, Item/Thickness/Width)
-        # ---------------------------------------------------------
         st.markdown("---")
         st.subheader("3. Sales Executive Analytics Comparison")
         c_se1, c_se2 = st.columns(2)
@@ -613,40 +635,39 @@ elif section == "📊 All Sales & Dispatch Analytics":
     st.subheader("1. Key Performance Indicators (KPIs)")
     kpis = calculate_kpis(df)
     
-    # Initialize session state for KPI drill-down
     if 'active_kpi_drill' not in st.session_state:
         st.session_state.active_kpi_drill = None
 
     st.markdown("👉 **Click any KPI card below to instantly open its detailed records:**")
     
-    # Row 1 of Clickable KPI Cards
+    # Row 1 of Clickable KPI Cards (Formatted cleanly with stacked title and clear numbers)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        if st.button(f"📌 Overall PO Count\n\n**{kpis['Overall PO Count']:,}**", use_container_width=True):
+        if st.button(f"📌 Overall PO Count\n\n### {kpis['Overall PO Count']:,}", use_container_width=True):
             st.session_state.active_kpi_drill = "Overall PO Count"
     with col2:
-        if st.button(f"📌 Overall DO Count\n\n**{kpis['Overall DO Count']:,}**", use_container_width=True):
+        if st.button(f"📌 Overall DO Count\n\n### {kpis['Overall DO Count']:,}", use_container_width=True):
             st.session_state.active_kpi_drill = "Overall DO Count"
     with col3:
-        if st.button(f"📌 Number of Parties\n\n**{kpis['Number of Parties']:,}**", use_container_width=True):
+        if st.button(f"📌 Number of Parties\n\n### {kpis['Number of Parties']:,}", use_container_width=True):
             st.session_state.active_kpi_drill = "Number of Parties"
     with col4:
-        if st.button(f"📌 Total PO Qty (MT)\n\n**{kpis['Total PO Quantity (MT)']:,.2f}**", use_container_width=True):
+        if st.button(f"📌 Total PO Qty (MT)\n\n### {kpis['Total PO Quantity (MT)']:,.2f}", use_container_width=True):
             st.session_state.active_kpi_drill = "Total PO Qty (MT)"
 
     # Row 2 of Clickable KPI Cards
     col5, col6, col7, col8 = st.columns(4)
     with col5:
-        if st.button(f"📌 Total Amount\n\n**₹{kpis['Total PO Amount']:,.2f}**", use_container_width=True):
+        if st.button(f"📌 Total Amount\n\n### ₹{kpis['Total PO Amount']:,.2f}", use_container_width=True):
             st.session_state.active_kpi_drill = "Total Amount"
     with col6:
-        if st.button(f"📌 Dispatched Qty (MT)\n\n**{kpis['Dispatched Qty (MT)']:,.2f}**", use_container_width=True):
+        if st.button(f"📌 Dispatched Qty (MT)\n\n### {kpis['Dispatched Qty (MT)']:,.2f}", use_container_width=True):
             st.session_state.active_kpi_drill = "Dispatched Qty"
     with col7:
-        if st.button(f"📌 Cancelled Qty (MT)\n\n**{kpis['Cancelled Qty (MT)']:,.2f}**", use_container_width=True):
+        if st.button(f"📌 Cancelled Qty (MT)\n\n### {kpis['Cancelled Qty (MT)']:,.2f}", use_container_width=True):
             st.session_state.active_kpi_drill = "Cancelled Qty"
     with col8:
-        if st.button(f"📌 Active Pending Qty (MT)\n\n**{kpis['Pending Qty (MT)']:,.2f}**", use_container_width=True):
+        if st.button(f"📌 Active Pending Qty (MT)\n\n### {kpis['Pending Qty (MT)']:,.2f}", use_container_width=True):
             st.session_state.active_kpi_drill = "Pending Qty"
 
     # ---------------------------------------------------------
