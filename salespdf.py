@@ -20,19 +20,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS to improve button text visibility & padding
+# Custom CSS to improve button styling and font clarity
 st.markdown("""
 <style>
-    /* Make buttons look like prominent KPI cards with clear multi-line text */
     div.stButton > button {
         width: 100%;
         height: auto;
-        padding: 12px 10px;
+        padding: 10px 8px;
         background-color: #F8FAFC;
         border: 1px solid #CBD5E1;
         border-radius: 8px;
         color: #1E293B;
         font-weight: 600;
+        font-size: 14px;
         text-align: center;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         transition: all 0.2s ease-in-out;
@@ -640,34 +640,34 @@ elif section == "📊 All Sales & Dispatch Analytics":
 
     st.markdown("👉 **Click any KPI card below to instantly open its detailed records:**")
     
-    # Row 1 of Clickable KPI Cards (Formatted cleanly with stacked title and clear numbers)
+    # Row 1 of Clickable KPI Cards (Clear, clean layout without truncation)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        if st.button(f"📌 Overall PO Count\n\n### {kpis['Overall PO Count']:,}", use_container_width=True):
+        if st.button(f"📌 PO Count: {kpis['Overall PO Count']:,}", use_container_width=True):
             st.session_state.active_kpi_drill = "Overall PO Count"
     with col2:
-        if st.button(f"📌 Overall DO Count\n\n### {kpis['Overall DO Count']:,}", use_container_width=True):
+        if st.button(f"📌 DO Count: {kpis['Overall DO Count']:,}", use_container_width=True):
             st.session_state.active_kpi_drill = "Overall DO Count"
     with col3:
-        if st.button(f"📌 Number of Parties\n\n### {kpis['Number of Parties']:,}", use_container_width=True):
+        if st.button(f"📌 Parties: {kpis['Number of Parties']:,}", use_container_width=True):
             st.session_state.active_kpi_drill = "Number of Parties"
     with col4:
-        if st.button(f"📌 Total PO Qty (MT)\n\n### {kpis['Total PO Quantity (MT)']:,.2f}", use_container_width=True):
+        if st.button(f"📌 PO Qty: {kpis['Total PO Quantity (MT)']:,.1f} MT", use_container_width=True):
             st.session_state.active_kpi_drill = "Total PO Qty (MT)"
 
     # Row 2 of Clickable KPI Cards
     col5, col6, col7, col8 = st.columns(4)
     with col5:
-        if st.button(f"📌 Total Amount\n\n### ₹{kpis['Total PO Amount']:,.2f}", use_container_width=True):
+        if st.button(f"📌 Amount: ₹{kpis['Total PO Amount']:,.0f}", use_container_width=True):
             st.session_state.active_kpi_drill = "Total Amount"
     with col6:
-        if st.button(f"📌 Dispatched Qty (MT)\n\n### {kpis['Dispatched Qty (MT)']:,.2f}", use_container_width=True):
+        if st.button(f"📌 Disp. Qty: {kpis['Dispatched Qty (MT)']:,.1f} MT", use_container_width=True):
             st.session_state.active_kpi_drill = "Dispatched Qty"
     with col7:
-        if st.button(f"📌 Cancelled Qty (MT)\n\n### {kpis['Cancelled Qty (MT)']:,.2f}", use_container_width=True):
+        if st.button(f"📌 Canc. Qty: {kpis['Cancelled Qty (MT)']:,.1f} MT", use_container_width=True):
             st.session_state.active_kpi_drill = "Cancelled Qty"
     with col8:
-        if st.button(f"📌 Active Pending Qty (MT)\n\n### {kpis['Pending Qty (MT)']:,.2f}", use_container_width=True):
+        if st.button(f"📌 Pend. Qty: {kpis['Pending Qty (MT)']:,.1f} MT", use_container_width=True):
             st.session_state.active_kpi_drill = "Pending Qty"
 
     # ---------------------------------------------------------
@@ -942,7 +942,7 @@ elif section == "🚚 Pending Dispatch":
     
     c1, c2, c3 = st.columns(3)
     c1.metric("Pending DOs Count", f"{pd_kpis['Delivery Orders (DOs)']:,}")
-    c2.metric("Pending POs Count", f"{pd_kpis['Pending POs (POs)']:,}") if 'Pending POs (POs)' in pd_kpis else c2.metric("Pending POs Count", f"{pd_kpis['Purchase Orders (POs)']:,}")
+    c2.metric("Pending POs Count", f"{pd_kpis['Purchase Orders (POs)']:,}")
     c3.metric("Parties Impacted", f"{pd_kpis['Parties Impacted']:,}")
 
     c4, c5, c6 = st.columns(3)
