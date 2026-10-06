@@ -382,7 +382,7 @@ xl = pd.ExcelFile(uploaded_file)
 sheet_names = xl.sheet_names
 
 section = st.sidebar.radio("Go to Section", [
-    "📅 Month Wise & Date Filter",
+    "📅 Date Comparison & Analysis",
     "📊 All Sales & Dispatch Analytics",
     "🚚 Pending Dispatch"
 ])
@@ -409,225 +409,131 @@ def calculate_kpis(data):
     }
 
 # =========================================================
-# SECTION 1: MONTH WISE & DATE FILTER
+# SECTION 1: DATE COMPARISON & ANALYSIS (Matching Purchase Style)
 # =========================================================
-if section == "📅 Month Wise & Date Filter":
+if section == "📅 Date Comparison & Analysis":
     selected_sheet = st.sidebar.selectbox("Select Month / Sheet", sheet_names)
     df = load_and_clean_sheet(uploaded_file, selected_sheet)
-    
-    st.header(f"Date & Month Analytics — {selected_sheet}")
-    
-    mode = st.radio("Select View Mode", ["Single Date Filter", "Compare Month-Wise / Date-Wise"])
     
     po_dates_df = df.dropna(subset=['PO DATE']).copy()
     po_dates_df['PO_DATE_ONLY'] = po_dates_df['PO DATE'].dt.date
     unique_dates = sorted(po_dates_df['PO_DATE_ONLY'].unique())
     
     if not unique_dates:
-        st.warning("No valid PO Dates found in this sheet.")
+        st.error("No valid PO Dates found matching format in this sheet.")
         st.stop()
 
-    if mode == "Single Date Filter":
-        date_options = [d.strftime('%d/%m/%Y') for d in unique_dates]
-        selected_date_str = st.selectbox("Select PO Date (DD/MM/YYYY)", date_options)
-        
-        selected_date = pd.to_datetime(selected_date_str, format='%d/%m/%Y').date()
-        filtered_df = df[df['PO DATE'].dt.date == selected_date]
-        
-        st.subheader(f"Details for PO Date: {selected_date_str}")
-        d_kpis = calculate_kpis(filtered_df)
-        
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("POs Received", d_kpis['Overall PO Count'])
-        c2.metric("Total Ordered Qty", f"{d_kpis['Total PO Quantity (MT)']:,.2f} MT")
-        c3.metric("Dispatched Qty", f"{d_kpis['Dispatched Qty (MT)']:,.2f} MT")
-        c4.metric("Total Amount", f"₹{d_kpis['Total PO Amount']:,.2f}")
-        
-        display_cols = [c for c in ['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'THICKNESS', 'SIZE', 'PO QTY (MT)', 'PER TON', 'DISP.QTY', 'PENDING', 'STATUS', 'REMARK'] if c in filtered_df.columns]
-        st.dataframe(filtered_df[display_cols], use_container_width=True)
+    date_options = [d.strftime('%d/%m/%Y') for d in unique_dates]
 
-        st.markdown("---")
-        st.subheader("📥 Download Date-Wise PDF Report")
-        
-        pdf_table_cols = [c for c in ['PO NO', 'DO NO', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING', 'STATUS'] if c in filtered_df.columns]
-        date_pdf_bytes = generate_exact_screen_pdf(
-            f"{selected_sheet} - {selected_date_str}",
-            d_kpis,
-            {},
-            {f"Orders for Date {selected_date_str}": filtered_df[pdf_table_cols]}
-        )
-        st.download_button(
-            f"📥 Download Report for {selected_date_str}",
-            data=date_pdf_bytes,
-            file_name=f"Report_{selected_sheet}_{selected_date_str.replace('/', '-')}.pdf",
-            mime="application/pdf"
-        )
+    selected_date_str = st.sidebar.selectbox("Select Primary Date", date_options)
+    enable_compare = st.sidebar.checkbox("Compare with another date")
 
-    else:
-        st.subheader("Compare Performance & Variance")
-        comp_type = st.radio("Comparison Mode", ["Date Wise", "Month Wise"], horizontal=True)
-        
-        if comp_type == "Date Wise":
-            date_options = [d.strftime('%d/%m/%Y') for d in unique_dates]
-            col1, col2 = st.columns(2)
-            with col1:
-                date1_str = st.selectbox("First PO Date (DD/MM/YYYY)", date_options, index=0)
-            with col2:
-                date2_str = st.selectbox("Second PO Date (DD/MM/YYYY)", date_options, index=min(1, len(date_options)-1))
-                
-            d1 = pd.to_datetime(date1_str, format='%d/%m/%Y').date()
-            d2 = pd.to_datetime(date2_str, format='%d/%m/%Y').date()
-            
-            df1 = df[df['PO DATE'].dt.date == d1]
-            df2 = df[df['PO DATE'].dt.date == d2]
-            label1, label2 = date1_str, date2_str
-            
+    compare_date_str = None
+    if enable_compare:
+        remaining_dates = [d for d in date_options if d != selected_date_str]
+        if remaining_dates:
+            compare_date_str = st.sidebar.selectbox("Select Comparison Date", remaining_dates)
         else:
-            col1, col2 = st.columns(2)
-            with col1:
-                sheet1 = st.selectbox("First Month Sheet", sheet_names, index=0, key="m1")
-            with col2:
-                sheet2 = st.selectbox("Second Month Sheet", sheet_names, index=min(1, len(sheet_names)-1), key="m2")
-                
-            df1 = load_and_clean_sheet(uploaded_file, sheet1)
-            df2 = load_and_clean_sheet(uploaded_file, sheet2)
-            label1, label2 = sheet1, sheet2
-            
-        kpi1 = calculate_kpis(df1)
-        kpi2 = calculate_kpis(df2)
-        
-        st.subheader("1. Key Performance Indicators (KPIs) & Variance")
-        comp_df = pd.DataFrame({
-            "Metric": ["Total PO Count", "Ordered Qty (MT)", "Dispatched Qty (MT)", "Cancelled Qty (MT)", "Pending Qty (MT)", "Total Amount (₹)", "Parties Count"],
-            f"{label1}": [kpi1['Overall PO Count'], kpi1['Total PO Quantity (MT)'], kpi1['Dispatched Qty (MT)'], kpi1['Cancelled Qty (MT)'], kpi1['Pending Qty (MT)'], kpi1['Total PO Amount'], kpi1['Number of Parties']],
-            f"{label2}": [kpi2['Overall PO Count'], kpi2['Total PO Quantity (MT)'], kpi2['Dispatched Qty (MT)'], kpi2['Cancelled Qty (MT)'], kpi2['Pending Qty (MT)'], kpi2['Total PO Amount'], kpi2['Number of Parties']],
-            "Variance (Diff)": [
-                kpi2['Overall PO Count'] - kpi1['Overall PO Count'],
-                kpi2['Total PO Quantity (MT)'] - kpi1['Total PO Quantity (MT)'],
-                kpi2['Dispatched Qty (MT)'] - kpi1['Dispatched Qty (MT)'],
-                kpi2['Cancelled Qty (MT)'] - kpi1['Cancelled Qty (MT)'],
-                kpi2['Pending Qty (MT)'] - kpi1['Pending Qty (MT)'],
-                kpi2['Total PO Amount'] - kpi1['Total PO Amount'],
-                kpi2['Number of Parties'] - kpi1['Number of Parties']
-            ]
-        })
-        st.table(comp_df)
-        
-        st.subheader("2. Visual Analytics Comparison")
-        fig_comp = go.Figure(data=[
-            go.Bar(
-                name=str(label1), 
-                x=["Ordered Qty", "Dispatched Qty", "Cancelled Qty", "Pending Qty"], 
-                y=[kpi1['Total PO Quantity (MT)'], kpi1['Dispatched Qty (MT)'], kpi1['Cancelled Qty (MT)'], kpi1['Pending Qty (MT)']], 
-                text=[f"{kpi1['Total PO Quantity (MT)']:,.1f}", f"{kpi1['Dispatched Qty (MT)']:,.1f}", f"{kpi1['Cancelled Qty (MT)']:,.1f}", f"{kpi1['Pending Qty (MT)']:,.1f}"], 
-                textposition='outside'
-            ),
-            go.Bar(
-                name=str(label2), 
-                x=["Ordered Qty", "Dispatched Qty", "Cancelled Qty", "Pending Qty"], 
-                y=[kpi2['Total PO Quantity (MT)'], kpi2['Dispatched Qty (MT)'], kpi2['Cancelled Qty (MT)'], kpi2['Pending Qty (MT)']], 
-                text=[f"{kpi2['Total PO Quantity (MT)']:,.1f}", f"{kpi2['Dispatched Qty (MT)']:,.1f}", f"{kpi2['Cancelled Qty (MT)']:,.1f}", f"{kpi2['Pending Qty (MT)']:,.1f}"], 
-                textposition='outside'
-            )
-        ])
-        fig_comp.update_layout(barmode='group', title=f"Comparison: {label1} vs {label2}")
+            st.sidebar.warning("Add more date tabs to compare.")
+
+    selected_date = pd.to_datetime(selected_date_str, format='%d/%m/%Y').date()
+    df_primary = df[df['PO DATE'].dt.date == selected_date]
+    primary_kpis = calculate_kpis(df_primary)
+
+    df_compare, compare_kpis = None, None
+    if compare_date_str:
+        compare_date = pd.to_datetime(compare_date_str, format='%d/%m/%Y').date()
+        df_compare = df[df['PO DATE'].dt.date == compare_date]
+        compare_kpis = calculate_kpis(df_compare)
+
+    header_title = f"📌 Key Metrics Overview: {selected_date_str}"
+    if compare_date_str:
+        header_title = f"📌 Key Metrics Overview: {selected_date_str} vs {compare_date_str}"
+    st.header(header_title)
+
+    # Row 1 KPIs (Quantities)
+    r1_col1, r1_col2, r1_col3, r1_col4 = st.columns(4)
+    r1_metrics = [
+        ('Total PO Quantity (MT)', 'TOTAL PO QTY', '{:,.2f} MT'),
+        ('Dispatched Qty (MT)', 'DISPATCHED QTY', '{:,.2f} MT'),
+        ('Cancelled Qty (MT)', 'CANCELLED QTY', '{:,.2f} MT'),
+        ('Pending Qty (MT)', 'PENDING QTY', '{:,.2f} MT')
+    ]
+    for col_widget, (key, label, fmt) in zip([r1_col1, r1_col2, r1_col3, r1_col4], r1_metrics):
+        with col_widget:
+            val = primary_kpis[key]
+            delta_val = None
+            if compare_kpis is not None:
+                diff = val - compare_kpis[key]
+                delta_val = f"{diff:+,.2f} vs {compare_date_str}"
+            st.metric(label=label, value=fmt.format(val), delta=delta_val)
+
+    st.markdown("### 💰 Financials & Volumes")
+    r2_col1, r2_col2, r2_col3 = st.columns(3)
+    r2_metrics = [
+        ('Overall PO Count', 'TOTAL POs', '{:,}'),
+        ('Overall DO Count', 'TOTAL DOs', '{:,}'),
+        ('Total PO Amount', 'TOTAL AMOUNT', '₹{:,.2f}')
+    ]
+    for col_widget, (key, label, fmt) in zip([r2_col1, r2_col2, r2_col3], r2_metrics):
+        with col_widget:
+            val = primary_kpis[key]
+            delta_val = None
+            if compare_kpis is not None:
+                diff = val - compare_kpis[key]
+                if "₹" in fmt:
+                    delta_val = f"₹{diff:+,.2f} vs {compare_date_str}"
+                else:
+                    delta_val = f"{diff:+,.0f} vs {compare_date_str}"
+            st.metric(label=label, value=fmt.format(val), delta=delta_val)
+
+    with st.expander("🔢 View Full Metrics Summary Table"):
+        metric_names = ['Overall PO Count', 'Overall DO Count', 'Number of Parties', 'Total PO Quantity (MT)', 'Dispatched Qty (MT)', 'Cancelled Qty (MT)', 'Pending Qty (MT)', 'Total PO Amount']
+        summary_data = {"Metric": metric_names, f"{selected_date_str} Total": [primary_kpis[m] for m in metric_names]}
+        if compare_kpis is not None:
+            summary_data[f"{compare_date_str} Total"] = [compare_kpis[m] for m in metric_names]
+            summary_data["Difference"] = [primary_kpis[m] - compare_kpis[m] for m in metric_names]
+        st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
+
+    if compare_date_str and compare_kpis is not None:
+        st.markdown("---")
+        st.header("📈 Date Comparison Visual Analysis")
+        comp_chart_df = pd.DataFrame({
+            "Metric": ["PO Qty", "Dispatched Qty", "Cancelled Qty", "Pending Qty"],
+            selected_date_str: [primary_kpis['Total PO Quantity (MT)'], primary_kpis['Dispatched Qty (MT)'], primary_kpis['Cancelled Qty (MT)'], primary_kpis['Pending Qty (MT)']],
+            compare_date_str: [compare_kpis['Total PO Quantity (MT)'], compare_kpis['Dispatched Qty (MT)'], compare_kpis['Cancelled Qty (MT)'], compare_kpis['Pending Qty (MT)']]
+        }).melt(id_vars="Metric", var_name="Date", value_name="Total Quantity")
+
+        fig_comp = px.bar(comp_chart_df, x="Metric", y="Total Quantity", color="Date", barmode="group",
+                          title=f"Metric Comparison: {selected_date_str} vs {compare_date_str}", text_auto=".2f")
+        fig_comp.update_traces(textposition="outside")
         st.plotly_chart(fig_comp, use_container_width=True)
 
-        st.markdown("---")
-        st.subheader("3. Sales Executive Comparison & Variance")
-        sp_summary_1 = df1.groupby('SELLER NAME').agg(
-            OrderedQty=('PO QTY (MT)', 'sum'),
-            Dispatched=('DISP.QTY', 'sum'),
-            Pending=('ACTIVE_PENDING_QTY', 'sum')
-        ).reset_index()
-        sp_summary_2 = df2.groupby('SELLER NAME').agg(
-            OrderedQty=('PO QTY (MT)', 'sum'),
-            Dispatched=('DISP.QTY', 'sum'),
-            Pending=('ACTIVE_PENDING_QTY', 'sum')
-        ).reset_index()
+    st.markdown("---")
+    st.header(f"📄 Detailed Data Table ({selected_date_str})")
+    display_cols = [c for c in ['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'THICKNESS', 'SIZE', 'PO QTY (MT)', 'PER TON', 'DISP.QTY', 'PENDING', 'STATUS', 'REMARK'] if c in df_primary.columns]
+    st.dataframe(df_primary[display_cols], use_container_width=True)
 
-        sp_comp_df = pd.merge(
-            sp_summary_1, sp_summary_2, on='SELLER NAME', how='outer', 
-            suffixes=(f' ({label1})', f' ({label2})')
-        ).fillna(0)
-        
-        sp_comp_df['Ordered Qty Variance'] = sp_comp_df[f'OrderedQty ({label2})'] - sp_comp_df[f'OrderedQty ({label1})']
-        sp_comp_df['Dispatched Variance'] = sp_comp_df[f'Dispatched ({label2})'] - sp_comp_df[f'Dispatched ({label1})']
-        sp_comp_df['Pending Variance'] = sp_comp_df[f'Pending ({label2})'] - sp_comp_df[f'Pending ({label1})']
-        st.dataframe(sp_comp_df, use_container_width=True)
-
-        st.markdown("---")
-        st.subheader("4. Party-Wise Comparison & Variance")
-        party_summary_1 = df1.groupby('PARTY NAME').agg(
-            OrderedQty=('PO QTY (MT)', 'sum'),
-            Dispatched=('DISP.QTY', 'sum'),
-            Pending=('ACTIVE_PENDING_QTY', 'sum')
-        ).reset_index()
-        party_summary_2 = df2.groupby('PARTY NAME').agg(
-            OrderedQty=('PO QTY (MT)', 'sum'),
-            Dispatched=('DISP.QTY', 'sum'),
-            Pending=('ACTIVE_PENDING_QTY', 'sum')
-        ).reset_index()
-
-        party_comp_df = pd.merge(
-            party_summary_1, party_summary_2, on='PARTY NAME', how='outer', 
-            suffixes=(f' ({label1})', f' ({label2})')
-        ).fillna(0)
-        
-        party_comp_df['Ordered Qty Variance'] = party_comp_df[f'OrderedQty ({label2})'] - party_comp_df[f'OrderedQty ({label1})']
-        party_comp_df['Dispatched Variance'] = party_comp_df[f'Dispatched ({label2})'] - party_comp_df[f'Dispatched ({label1})']
-        party_comp_df['Pending Variance'] = party_comp_df[f'Pending ({label2})'] - party_comp_df[f'Pending ({label1})']
-        st.dataframe(party_comp_df, use_container_width=True)
-
-        st.markdown("---")
-        st.subheader("5. Item, Thickness & Width Summary Comparison & Variance")
-        item_summary_1 = df1.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
-            OrderedQty=('PO QTY (MT)', 'sum'),
-            Dispatched=('DISP.QTY', 'sum'),
-            Pending=('ACTIVE_PENDING_QTY', 'sum')
-        ).reset_index()
-        item_summary_2 = df2.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
-            OrderedQty=('PO QTY (MT)', 'sum'),
-            Dispatched=('DISP.QTY', 'sum'),
-            Pending=('ACTIVE_PENDING_QTY', 'sum')
-        ).reset_index()
-
-        item_comp_df = pd.merge(
-            item_summary_1, item_summary_2, on=['ITEM', 'THICKNESS_MM', 'WIDTH_MM'], how='outer', 
-            suffixes=(f' ({label1})', f' ({label2})')
-        ).fillna(0)
-        
-        item_comp_df['Ordered Qty Variance'] = item_comp_df[f'OrderedQty ({label2})'] - item_comp_df[f'OrderedQty ({label1})']
-        item_comp_df['Dispatched Variance'] = item_comp_df[f'Dispatched ({label2})'] - item_comp_df[f'Dispatched ({label1})']
-        item_comp_df['Pending Variance'] = item_comp_df[f'Pending ({label2})'] - item_comp_df[f'Pending ({label1})']
-        st.dataframe(item_comp_df, use_container_width=True)
-
-        st.markdown("---")
-        st.subheader("📥 Download Comparison & Variance PDF Report")
-        
+    st.markdown("---")
+    st.header("📥 Export Report")
+    
+    comp_chart_buf = None
+    if compare_date_str and compare_kpis is not None:
         comp_chart_buf = make_comparison_bar_chart_bytes(
-            label1, label2, kpi1, kpi2, f"Comparison: {label1} vs {label2}"
+            selected_date_str, compare_date_str, primary_kpis, compare_kpis, f"Comparison: {selected_date_str} vs {compare_date_str}"
         )
-        
-        comparison_tables_dict = {
-            "Comparison Summary Metrics": comp_df,
-            "Sales Executive Comparison & Variance": sp_comp_df,
-            "Party-Wise Comparison & Variance": party_comp_df,
-            "Item/Thickness/Width Comparison & Variance": item_comp_df
-        }
-        
-        comp_pdf_bytes = generate_exact_screen_pdf(
-            f"Comparison & Variance ({label1} vs {label2})",
-            {f"Summary": f"Comparing {label1} and {label2}"},
-            {"Comparison Chart": comp_chart_buf},
-            comparison_tables_dict
-        )
-        st.download_button(
-            "📥 Download Comparison & Variance PDF Report",
-            data=comp_pdf_bytes,
-            file_name=f"Comparison_Variance_Report_{str(label1).replace('/', '-')}_vs_{str(label2).replace('/', '-')}.pdf",
-            mime="application/pdf"
-        )
+    
+    pdf_table_cols = [c for c in ['PO NO', 'DO NO', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING', 'STATUS'] if c in df_primary.columns]
+    report_title = f"Sales Report - {selected_date_str}" if not compare_date_str else f"Sales Comparison - {selected_date_str} vs {compare_date_str}"
+    
+    pdf_bytes = generate_exact_screen_pdf(
+        report_title,
+        primary_kpis,
+        {"Comparison Chart": comp_chart_buf} if comp_chart_buf else {},
+        {f"Orders for {selected_date_str}": df_primary[pdf_table_cols]}
+    )
+    filename = f"Sales_Report_{selected_date_str.replace('/', '-')}.pdf" if not compare_date_str else f"Sales_Comparison_{selected_date_str.replace('/', '-')}_vs_{compare_date_str.replace('/', '-')}.pdf"
+    st.download_button("📄 Download Sales PDF Report", data=pdf_bytes, file_name=filename, mime="application/pdf")
 
 # =========================================================
 # SECTION 2: ALL SALES & DISPATCH ANALYTICS
@@ -749,7 +655,6 @@ elif section == "📊 All Sales & Dispatch Analytics":
     st.plotly_chart(fig_kpi, use_container_width=True)
     
     st.markdown("---")
-    
     st.subheader("2. Sales Executive Analytics")
     sp_item_grp = df.groupby(['SELLER NAME', 'ITEM']).agg(
         OrderedQty=('PO QTY (MT)', 'sum'),
@@ -804,17 +709,7 @@ elif section == "📊 All Sales & Dispatch Analytics":
         fig_rec.update_traces(textposition='outside')
         st.plotly_chart(fig_rec, use_container_width=True)
 
-    st.write("**Short Closed Orders (Remarks with 'SC')**")
-    sc_df = df[df['REMARK'].str.lower().str.contains(r'\bsc\b|short close', na=False)]
-    if not sc_df.empty:
-        sc_summary = sc_df.groupby(['SELLER NAME', 'PARTY NAME', 'PO NO', 'REMARK']).agg(ShortClosedQty=('PENDING', 'sum')).reset_index()
-        st.dataframe(sc_summary, use_container_width=True)
-    else:
-        sc_summary = pd.DataFrame()
-        st.info("No Short Closed ('SC') orders found.")
-
     st.markdown("---")
-    
     st.subheader("3. Party Wise Analytics")
     party_grp = df.groupby(['PARTY NAME', 'SELLER NAME']).agg(
         OrderedQty=('PO QTY (MT)', 'sum'),
@@ -828,61 +723,9 @@ elif section == "📊 All Sales & Dispatch Analytics":
     
     filtered_party_grp = party_grp if selected_party == "All" else party_grp[party_grp['PARTY NAME'] == selected_party]
     st.dataframe(filtered_party_grp, use_container_width=True)
-    
-    fig_party = px.bar(
-        filtered_party_grp.head(15), 
-        x='PARTY NAME', 
-        y=['OrderedQty', 'DispatchedQty', 'CancelledQty', 'PendingQty'],
-        title="Top Parties - Ordered vs Dispatched vs Cancelled vs Pending",
-        barmode='group',
-        text_auto=',.1f'
-    )
-    fig_party.update_traces(textposition='outside')
-    st.plotly_chart(fig_party, use_container_width=True)
 
     st.markdown("---")
-    
-    st.subheader("4. Detailed Item, Thickness & Width Summary")
-    item_spec_grp = df.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
-        OrderedQty=('PO QTY (MT)', 'sum'),
-        DispatchedQty=('DISP.QTY', 'sum'),
-        CancelledQty=('CANCELLED_QTY', 'sum'),
-        PendingQty=('ACTIVE_PENDING_QTY', 'sum')
-    ).reset_index()
-    
-    item_spec_grp.rename(columns={
-        'ITEM': 'Item Name',
-        'THICKNESS_MM': 'Thickness (mm)',
-        'WIDTH_MM': 'Width (mm)',
-        'OrderedQty': 'Ordered Qty (MT)',
-        'DispatchedQty': 'Dispatched Qty (MT)',
-        'CancelledQty': 'Cancelled Qty (MT)',
-        'PendingQty': 'Pending Qty (MT)'
-    }, inplace=True)
-
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-        all_items_list = sorted(item_spec_grp['Item Name'].unique().tolist())
-        selected_items = st.multiselect("Filter Item Name(s)", all_items_list, default=[])
-    with col_f2:
-        all_thickness_list = sorted(item_spec_grp['Thickness (mm)'].unique().tolist(), key=lambda x: str(x))
-        selected_thicknesses = st.multiselect("Filter Thickness (mm)", all_thickness_list, default=[])
-    with col_f3:
-        all_width_list = sorted(item_spec_grp['Width (mm)'].unique().tolist(), key=lambda x: str(x))
-        selected_widths = st.multiselect("Filter Width (mm)", all_width_list, default=[])
-
-    display_spec_table = item_spec_grp.copy()
-    if selected_items:
-        display_spec_table = display_spec_table[display_spec_table['Item Name'].isin(selected_items)]
-    if selected_thicknesses:
-        display_spec_table = display_spec_table[display_spec_table['Thickness (mm)'].isin(selected_thicknesses)]
-    if selected_widths:
-        display_spec_table = display_spec_table[display_spec_table['Width (mm)'].isin(selected_widths)]
-
-    st.dataframe(display_spec_table, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("📄 Download Dashboard PDF Report")
+    st.subheader("📥 Export Dashboard PDF Report")
     
     chart_bufs = {
         "Overall Status Breakdown": make_pie_chart_bytes(
@@ -895,9 +738,6 @@ elif section == "📊 All Sales & Dispatch Analytics":
         ),
         "Order Received Qty by Sales Person": make_bar_chart_bytes(
             sp_rec, 'SELLER NAME', 'PO QTY (MT)', "Order Received Qty by Sales Person", color='#3B82F6'
-        ),
-        "Top Parties Breakdown": make_bar_chart_bytes(
-            filtered_party_grp.head(10), 'PARTY NAME', ['OrderedQty', 'DispatchedQty', 'PendingQty'], "Top Parties Breakdown"
         )
     }
     
@@ -905,8 +745,7 @@ elif section == "📊 All Sales & Dispatch Analytics":
         "Sales Executive Performance Breakdown": sp_item_grp,
         "Cancelled Orders per Sales Person": sp_cancelled,
         "Pending Orders per Sales Person": sp_pending,
-        "Party Wise Summary": party_grp,
-        "Filtered Item, Thickness & Width Summary": display_spec_table
+        "Party Wise Summary": party_grp
     }
     
     pdf_bytes = generate_exact_screen_pdf(selected_sheet, kpis, chart_bufs, tables_to_pdf)
@@ -952,22 +791,6 @@ elif section == "🚚 Pending Dispatch":
     c6.metric("Est. Pending Value", f"₹{pd_kpis['Est. Pending Value (₹)']:,.2f}")
     
     st.markdown("---")
-    st.subheader("Pending Quantity Breakdown by Sales Person")
-    
-    sp_pd_df = active_pd.groupby('SELLER NAME')['ACTIVE_PENDING_QTY'].sum().reset_index()
-    
-    fig_pd = px.bar(
-        sp_pd_df,
-        x='SELLER NAME',
-        y='ACTIVE_PENDING_QTY',
-        title="Pending Dispatch Qty (MT) by Sales Person",
-        text_auto=',.1f',
-        color_discrete_sequence=['#EF4444']
-    )
-    fig_pd.update_traces(textposition='outside')
-    st.plotly_chart(fig_pd, use_container_width=True)
-    
-    st.markdown("---")
     st.subheader("📋 Pending Dispatch Detailed Data Table")
     
     pending_details_df = active_pd[['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'THICKNESS_MM', 'SIZE', 'PO QTY (MT)', 'DISP.QTY', 'ACTIVE_PENDING_QTY', 'REMARK']].copy()
@@ -977,16 +800,10 @@ elif section == "🚚 Pending Dispatch":
     st.markdown("---")
     st.subheader("📥 Export Pending Dispatch PDF")
     
-    pd_chart_bufs = {
-        "Pending Quantity Breakdown": make_bar_chart_bytes(
-            sp_pd_df, 'SELLER NAME', 'ACTIVE_PENDING_QTY', "Pending Dispatch Qty by Sales Person", color='#EF4444'
-        )
-    }
-    
     pdf_bytes = generate_exact_screen_pdf(
         pd_sheet,
         pd_kpis,
-        pd_chart_bufs,
+        {},
         {"Pending Dispatch Details": pending_details_df}
     )
     if pdf_bytes:
