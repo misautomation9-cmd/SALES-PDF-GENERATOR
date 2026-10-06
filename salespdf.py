@@ -508,13 +508,9 @@ if section == "📅 Month Wise & Date Filter":
         fig_comp.update_layout(barmode='group', title=f"Comparison: {label1} vs {label2}")
         st.plotly_chart(fig_comp, use_container_width=True)
 
-        # ---------------------------------------------------------
-        # AGGREGATED COMPARISONS (Sales Exec, Party-Wise, Item/Thickness/Width)
-        # ---------------------------------------------------------
         st.markdown("---")
         st.subheader("3. Sales Person Wise Summary & Comparison")
         
-        # Build comparative Sales Person summary table
         sp_1 = df1.groupby('SELLER NAME').agg(OrderedQty1=('PO QTY (MT)', 'sum'), Dispatched1=('DISP.QTY', 'sum'), Pending1=('ACTIVE_PENDING_QTY', 'sum')).reset_index()
         sp_2 = df2.groupby('SELLER NAME').agg(OrderedQty2=('PO QTY (MT)', 'sum'), Dispatched2=('DISP.QTY', 'sum'), Pending2=('ACTIVE_PENDING_QTY', 'sum')).reset_index()
         sp_comp = pd.merge(sp_1, sp_2, on='SELLER NAME', how='outer').fillna(0)
@@ -534,15 +530,6 @@ if section == "📅 Month Wise & Date Filter":
         })
         st.write(f"**Comparison Matrix: Sales Person Wise ({label1} vs {label2})**")
         st.dataframe(sp_display_table, use_container_width=True)
-        
-        with st.expander("🔍 View Detailed Sales Person Transactions"):
-            c_se1, c_se2 = st.columns(2)
-            with c_se1:
-                st.write(f"**Detailed Breakdown — {label1}**")
-                st.dataframe(df1[['SELLER NAME', 'PARTY NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING']], use_container_width=True)
-            with c_se2:
-                st.write(f"**Detailed Breakdown — {label2}**")
-                st.dataframe(df2[['SELLER NAME', 'PARTY NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING']], use_container_width=True)
 
         st.markdown("---")
         st.subheader("4. Party Wise Summary & Comparison")
@@ -566,15 +553,6 @@ if section == "📅 Month Wise & Date Filter":
         })
         st.write(f"**Comparison Matrix: Party Wise ({label1} vs {label2})**")
         st.dataframe(party_display_table, use_container_width=True)
-        
-        with st.expander("🔍 View Detailed Party Transactions"):
-            c_p1, c_p2 = st.columns(2)
-            with c_p1:
-                st.write(f"**Party Transactions — {label1}**")
-                st.dataframe(df1[['PARTY NAME', 'PO NO', 'ITEM', 'PO QTY (MT)', 'DISP.QTY']], use_container_width=True)
-            with c_p2:
-                st.write(f"**Party Transactions — {label2}**")
-                st.dataframe(df2[['PARTY NAME', 'PO NO', 'ITEM', 'PO QTY (MT)', 'DISP.QTY']], use_container_width=True)
 
         st.markdown("---")
         st.subheader("5. Detailed Item, Thickness & Width Summary Comparison")
@@ -600,15 +578,6 @@ if section == "📅 Month Wise & Date Filter":
         })
         st.write(f"**Unified Comparison Matrix: Item, Thickness & Width ({label1} vs {label2})**")
         st.dataframe(item_display_table, use_container_width=True)
-        
-        with st.expander("🔍 View Detailed Item Dimension Transactions"):
-            c_i1, c_i2 = st.columns(2)
-            with c_i1:
-                st.write(f"**Detailed Item Lines — {label1}**")
-                st.dataframe(df1[['ITEM', 'THICKNESS_MM', 'WIDTH_MM', 'PO NO', 'PARTY NAME', 'PO QTY (MT)', 'DISP.QTY']], use_container_width=True)
-            with c_i2:
-                st.write(f"**Detailed Item Lines — {label2}**")
-                st.dataframe(df2[['ITEM', 'THICKNESS_MM', 'WIDTH_MM', 'PO NO', 'PARTY NAME', 'PO QTY (MT)', 'DISP.QTY']], use_container_width=True)
 
         st.markdown("---")
         st.subheader("📥 Download Comparison PDF Report")
@@ -660,6 +629,62 @@ elif section == "📊 All Sales & Dispatch Analytics":
     c6.metric("Sum of Dispatched Qty (MT)", f"{kpis['Dispatched Qty (MT)']:,.2f}")
     c7.metric("Sum of Cancelled Qty (MT)", f"{kpis['Cancelled Qty (MT)']:,.2f}")
     c8.metric("Sum of Active Pending Qty (MT)", f"{kpis['Pending Qty (MT)']:,.2f}")
+    
+    # ---------------------------------------------------------
+    # KPI LINKING / DRILL-DOWN FEATURE
+    # ---------------------------------------------------------
+    st.markdown("---")
+    st.subheader("🔍 Click / Open a KPI to View Linked Details")
+    
+    selected_kpi_drill = st.selectbox(
+        "Select KPI to open its detailed transaction records:",
+        [
+            "All Transactions",
+            "Dispatched Orders (DISP.QTY > 0)",
+            "Cancelled Orders (IS_CANCELLED)",
+            "Pending Orders (ACTIVE_PENDING_QTY > 0)",
+            "Sales Executive Breakdown",
+            "Party-Wise Breakdown"
+        ]
+    )
+    
+    if selected_kpi_drill == "All Transactions":
+        st.write(f"**Showing All Records ({len(df)} rows)**")
+        st.dataframe(df, use_container_width=True)
+    elif selected_kpi_drill == "Dispatched Orders (DISP.QTY > 0)":
+        disp_subset = df[df['DISP.QTY'] > 0]
+        st.write(f"**Linked Details: Dispatched Orders ({len(disp_subset)} rows | Total: {disp_subset['DISP.QTY'].sum():,.2f} MT)**")
+        st.dataframe(disp_subset[['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING', 'STATUS', 'REMARK']], use_container_width=True)
+    elif selected_kpi_drill == "Cancelled Orders (IS_CANCELLED)":
+        canc_subset = df[df['IS_CANCELLED']]
+        st.write(f"**Linked Details: Cancelled Orders ({len(canc_subset)} rows | Total: {canc_subset['CANCELLED_QTY'].sum():,.2f} MT)**")
+        st.dataframe(canc_subset[['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'STATUS', 'REMARK']], use_container_width=True)
+    elif selected_kpi_drill == "Pending Orders (ACTIVE_PENDING_QTY > 0)":
+        pend_subset = df[df['ACTIVE_PENDING_QTY'] > 0]
+        st.write(f"**Linked Details: Pending Orders ({len(pend_subset)} rows | Total: {pend_subset['ACTIVE_PENDING_QTY'].sum():,.2f} MT)**")
+        st.dataframe(pend_subset[['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'ACTIVE_PENDING_QTY', 'REMARK']], use_container_width=True)
+    elif selected_kpi_drill == "Sales Executive Breakdown":
+        st.write("**Linked Details: Sales Executive Summary**")
+        sp_summary = df.groupby('SELLER NAME').agg(
+            TotalPOs=('PO NO', 'nunique'),
+            OrderedQty=('PO QTY (MT)', 'sum'),
+            DispatchedQty=('DISP.QTY', 'sum'),
+            PendingQty=('ACTIVE_PENDING_QTY', 'sum'),
+            TotalAmount=('AMOUNT', 'sum')
+        ).reset_index()
+        st.dataframe(sp_summary, use_container_width=True)
+    elif selected_kpi_drill == "Party-Wise Breakdown":
+        st.write("**Linked Details: Party-Wise Summary**")
+        party_summary = df.groupby('PARTY NAME').agg(
+            TotalPOs=('PO NO', 'nunique'),
+            OrderedQty=('PO QTY (MT)', 'sum'),
+            DispatchedQty=('DISP.QTY', 'sum'),
+            PendingQty=('ACTIVE_PENDING_QTY', 'sum'),
+            TotalAmount=('AMOUNT', 'sum')
+        ).reset_index()
+        st.dataframe(party_summary, use_container_width=True)
+
+    st.markdown("---")
     
     fig_kpi = go.Figure(data=[go.Pie(
         labels=['Dispatched Qty', 'Cancelled Qty', 'Pending Qty'],
