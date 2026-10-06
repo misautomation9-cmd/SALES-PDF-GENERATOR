@@ -578,7 +578,6 @@ if section == "📅 Month Wise & Date Filter":
             label1, label2, kpi1, kpi2, f"Comparison: {label1} vs {label2}"
         )
         
-        # Build concise analytical comparison tables for the PDF
         comparison_tables_dict = {
             "Comparison Summary Metrics": comp_df,
             f"Sales Executive Summary — {label1}": sp_summary_1,
@@ -832,7 +831,7 @@ elif section == "🚚 Pending Dispatch":
     
     c1, c2, c3 = st.columns(3)
     c1.metric("Pending DOs Count", f"{pd_kpis['Delivery Orders (DOs)']:,}")
-    c2.metric("Pending POs Count", f"{pd_kpis['Pending POs (POs)']:,}") if 'Pending POs (POs)' in pd_kpis else c2.metric("Pending POs Count", f"{pd_kpis['Purchase Orders (POs)']:,}")
+    c2.metric("Pending POs Count", f"{pd_kpis['Purchase Orders (POs)']:,}")
     c3.metric("Parties Impacted", f"{pd_kpis['Parties Impacted']:,}")
 
     c4, c5, c6 = st.columns(3)
