@@ -464,7 +464,7 @@ if section == "📅 Month Wise & Date Filter":
         )
 
     else:
-        st.subheader("Compare Performance")
+        st.subheader("Compare Performance & Variance")
         comp_type = st.radio("Comparison Mode", ["Date Wise", "Month Wise"], horizontal=True)
         
         if comp_type == "Date Wise":
@@ -496,12 +496,12 @@ if section == "📅 Month Wise & Date Filter":
         kpi1 = calculate_kpis(df1)
         kpi2 = calculate_kpis(df2)
         
-        st.subheader("1. Key Performance Indicators (KPIs) Comparison")
+        st.subheader("1. Key Performance Indicators (KPIs) & Variance")
         comp_df = pd.DataFrame({
             "Metric": ["Total PO Count", "Ordered Qty (MT)", "Dispatched Qty (MT)", "Cancelled Qty (MT)", "Pending Qty (MT)", "Total Amount (₹)", "Parties Count"],
             f"{label1}": [kpi1['Overall PO Count'], kpi1['Total PO Quantity (MT)'], kpi1['Dispatched Qty (MT)'], kpi1['Cancelled Qty (MT)'], kpi1['Pending Qty (MT)'], kpi1['Total PO Amount'], kpi1['Number of Parties']],
             f"{label2}": [kpi2['Overall PO Count'], kpi2['Total PO Quantity (MT)'], kpi2['Dispatched Qty (MT)'], kpi2['Cancelled Qty (MT)'], kpi2['Pending Qty (MT)'], kpi2['Total PO Amount'], kpi2['Number of Parties']],
-            "Difference": [
+            "Variance (Diff)": [
                 kpi2['Overall PO Count'] - kpi1['Overall PO Count'],
                 kpi2['Total PO Quantity (MT)'] - kpi1['Total PO Quantity (MT)'],
                 kpi2['Dispatched Qty (MT)'] - kpi1['Dispatched Qty (MT)'],
@@ -534,67 +534,76 @@ if section == "📅 Month Wise & Date Filter":
         st.plotly_chart(fig_comp, use_container_width=True)
 
         st.markdown("---")
-        st.subheader("3. Sales Executive Analytics Comparison")
-        c_se1, c_se2 = st.columns(2)
-        with c_se1:
-            st.write(f"**Sales Executive Summary — {label1}**")
-            sp_summary_1 = df1.groupby('SELLER NAME').agg(
-                OrderedQty=('PO QTY (MT)', 'sum'),
-                Dispatched=('DISP.QTY', 'sum'),
-                Pending=('ACTIVE_PENDING_QTY', 'sum')
-            ).reset_index()
-            st.dataframe(sp_summary_1, use_container_width=True)
-        with c_se2:
-            st.write(f"**Sales Executive Summary — {label2}**")
-            sp_summary_2 = df2.groupby('SELLER NAME').agg(
-                OrderedQty=('PO QTY (MT)', 'sum'),
-                Dispatched=('DISP.QTY', 'sum'),
-                Pending=('ACTIVE_PENDING_QTY', 'sum')
-            ).reset_index()
-            st.dataframe(sp_summary_2, use_container_width=True)
+        st.subheader("3. Sales Executive Comparison & Variance")
+        sp_summary_1 = df1.groupby('SELLER NAME').agg(
+            OrderedQty=('PO QTY (MT)', 'sum'),
+            Dispatched=('DISP.QTY', 'sum'),
+            Pending=('ACTIVE_PENDING_QTY', 'sum')
+        ).reset_index()
+        sp_summary_2 = df2.groupby('SELLER NAME').agg(
+            OrderedQty=('PO QTY (MT)', 'sum'),
+            Dispatched=('DISP.QTY', 'sum'),
+            Pending=('ACTIVE_PENDING_QTY', 'sum')
+        ).reset_index()
+
+        sp_comp_df = pd.merge(
+            sp_summary_1, sp_summary_2, on='SELLER NAME', how='outer', 
+            suffixes=(f' ({label1})', f' ({label2})')
+        ).fillna(0)
+        
+        sp_comp_df['Ordered Qty Variance'] = sp_comp_df[f'OrderedQty ({label2})'] - sp_comp_df[f'OrderedQty ({label1})']
+        sp_comp_df['Dispatched Variance'] = sp_comp_df[f'Dispatched ({label2})'] - sp_comp_df[f'Dispatched ({label1})']
+        sp_comp_df['Pending Variance'] = sp_comp_df[f'Pending ({label2})'] - sp_comp_df[f'Pending ({label1})']
+        st.dataframe(sp_comp_df, use_container_width=True)
 
         st.markdown("---")
-        st.subheader("4. Party-Wise Analytics Comparison")
-        c_p1, c_p2 = st.columns(2)
-        with c_p1:
-            st.write(f"**Party-Wise Summary — {label1}**")
-            party_summary_1 = df1.groupby('PARTY NAME').agg(
-                OrderedQty=('PO QTY (MT)', 'sum'),
-                Dispatched=('DISP.QTY', 'sum'),
-                Pending=('ACTIVE_PENDING_QTY', 'sum')
-            ).reset_index()
-            st.dataframe(party_summary_1, use_container_width=True)
-        with c_p2:
-            st.write(f"**Party-Wise Summary — {label2}**")
-            party_summary_2 = df2.groupby('PARTY NAME').agg(
-                OrderedQty=('PO QTY (MT)', 'sum'),
-                Dispatched=('DISP.QTY', 'sum'),
-                Pending=('ACTIVE_PENDING_QTY', 'sum')
-            ).reset_index()
-            st.dataframe(party_summary_2, use_container_width=True)
+        st.subheader("4. Party-Wise Comparison & Variance")
+        party_summary_1 = df1.groupby('PARTY NAME').agg(
+            OrderedQty=('PO QTY (MT)', 'sum'),
+            Dispatched=('DISP.QTY', 'sum'),
+            Pending=('ACTIVE_PENDING_QTY', 'sum')
+        ).reset_index()
+        party_summary_2 = df2.groupby('PARTY NAME').agg(
+            OrderedQty=('PO QTY (MT)', 'sum'),
+            Dispatched=('DISP.QTY', 'sum'),
+            Pending=('ACTIVE_PENDING_QTY', 'sum')
+        ).reset_index()
+
+        party_comp_df = pd.merge(
+            party_summary_1, party_summary_2, on='PARTY NAME', how='outer', 
+            suffixes=(f' ({label1})', f' ({label2})')
+        ).fillna(0)
+        
+        party_comp_df['Ordered Qty Variance'] = party_comp_df[f'OrderedQty ({label2})'] - party_comp_df[f'OrderedQty ({label1})']
+        party_comp_df['Dispatched Variance'] = party_comp_df[f'Dispatched ({label2})'] - party_comp_df[f'Dispatched ({label1})']
+        party_comp_df['Pending Variance'] = party_comp_df[f'Pending ({label2})'] - party_comp_df[f'Pending ({label1})']
+        st.dataframe(party_comp_df, use_container_width=True)
 
         st.markdown("---")
-        st.subheader("5. Detailed Item, Thickness & Width Summary Comparison")
-        c_i1, c_i2 = st.columns(2)
-        with c_i1:
-            st.write(f"**Item/Thickness/Width Summary — {label1}**")
-            item_summary_1 = df1.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
-                OrderedQty=('PO QTY (MT)', 'sum'),
-                Dispatched=('DISP.QTY', 'sum'),
-                Pending=('ACTIVE_PENDING_QTY', 'sum')
-            ).reset_index()
-            st.dataframe(item_summary_1, use_container_width=True)
-        with c_i2:
-            st.write(f"**Item/Thickness/Width Summary — {label2}**")
-            item_summary_2 = df2.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
-                OrderedQty=('PO QTY (MT)', 'sum'),
-                Dispatched=('DISP.QTY', 'sum'),
-                Pending=('ACTIVE_PENDING_QTY', 'sum')
-            ).reset_index()
-            st.dataframe(item_summary_2, use_container_width=True)
+        st.subheader("5. Item, Thickness & Width Summary Comparison & Variance")
+        item_summary_1 = df1.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
+            OrderedQty=('PO QTY (MT)', 'sum'),
+            Dispatched=('DISP.QTY', 'sum'),
+            Pending=('ACTIVE_PENDING_QTY', 'sum')
+        ).reset_index()
+        item_summary_2 = df2.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
+            OrderedQty=('PO QTY (MT)', 'sum'),
+            Dispatched=('DISP.QTY', 'sum'),
+            Pending=('ACTIVE_PENDING_QTY', 'sum')
+        ).reset_index()
+
+        item_comp_df = pd.merge(
+            item_summary_1, item_summary_2, on=['ITEM', 'THICKNESS_MM', 'WIDTH_MM'], how='outer', 
+            suffixes=(f' ({label1})', f' ({label2})')
+        ).fillna(0)
+        
+        item_comp_df['Ordered Qty Variance'] = item_comp_df[f'OrderedQty ({label2})'] - item_comp_df[f'OrderedQty ({label1})']
+        item_comp_df['Dispatched Variance'] = item_comp_df[f'Dispatched ({label2})'] - item_comp_df[f'Dispatched ({label1})']
+        item_comp_df['Pending Variance'] = item_comp_df[f'Pending ({label2})'] - item_comp_df[f'Pending ({label1})']
+        st.dataframe(item_comp_df, use_container_width=True)
 
         st.markdown("---")
-        st.subheader("📥 Download Comparison PDF Report")
+        st.subheader("📥 Download Comparison & Variance PDF Report")
         
         comp_chart_buf = make_comparison_bar_chart_bytes(
             label1, label2, kpi1, kpi2, f"Comparison: {label1} vs {label2}"
@@ -602,24 +611,21 @@ if section == "📅 Month Wise & Date Filter":
         
         comparison_tables_dict = {
             "Comparison Summary Metrics": comp_df,
-            f"Sales Executive Summary — {label1}": sp_summary_1,
-            f"Sales Executive Summary — {label2}": sp_summary_2,
-            f"Party-Wise Summary — {label1}": party_summary_1,
-            f"Party-Wise Summary — {label2}": party_summary_2,
-            f"Item/Thickness/Width Summary — {label1}": item_summary_1,
-            f"Item/Thickness/Width Summary — {label2}": item_summary_2
+            "Sales Executive Comparison & Variance": sp_comp_df,
+            "Party-Wise Comparison & Variance": party_comp_df,
+            "Item/Thickness/Width Comparison & Variance": item_comp_df
         }
         
         comp_pdf_bytes = generate_exact_screen_pdf(
-            f"Comparison ({label1} vs {label2})",
+            f"Comparison & Variance ({label1} vs {label2})",
             {f"Summary": f"Comparing {label1} and {label2}"},
             {"Comparison Chart": comp_chart_buf},
             comparison_tables_dict
         )
         st.download_button(
-            "📥 Download Comparison PDF Report",
+            "📥 Download Comparison & Variance PDF Report",
             data=comp_pdf_bytes,
-            file_name=f"Comparison_Report_{str(label1).replace('/', '-')}_vs_{str(label2).replace('/', '-')}.pdf",
+            file_name=f"Comparison_Variance_Report_{str(label1).replace('/', '-')}_vs_{str(label2).replace('/', '-')}.pdf",
             mime="application/pdf"
         )
 
@@ -640,7 +646,6 @@ elif section == "📊 All Sales & Dispatch Analytics":
 
     st.markdown("👉 **Click any KPI card below to instantly open its detailed records:**")
     
-    # Row 1 of Clickable KPI Cards (Clear, clean layout without truncation)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button(f"📌 PO Count: {kpis['Overall PO Count']:,}", use_container_width=True):
@@ -655,7 +660,6 @@ elif section == "📊 All Sales & Dispatch Analytics":
         if st.button(f"📌 PO Qty: {kpis['Total PO Quantity (MT)']:,.1f} MT", use_container_width=True):
             st.session_state.active_kpi_drill = "Total PO Qty (MT)"
 
-    # Row 2 of Clickable KPI Cards
     col5, col6, col7, col8 = st.columns(4)
     with col5:
         if st.button(f"📌 Amount: ₹{kpis['Total PO Amount']:,.0f}", use_container_width=True):
@@ -670,9 +674,6 @@ elif section == "📊 All Sales & Dispatch Analytics":
         if st.button(f"📌 Pend. Qty: {kpis['Pending Qty (MT)']:,.1f} MT", use_container_width=True):
             st.session_state.active_kpi_drill = "Pending Qty"
 
-    # ---------------------------------------------------------
-    # DISPLAY LINKED DETAILS BASED ON CLICKED KPI CARD
-    # ---------------------------------------------------------
     if st.session_state.active_kpi_drill:
         st.markdown("---")
         col_title_col, col_close_col = st.columns([8, 1])
