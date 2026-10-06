@@ -508,104 +508,6 @@ if section == "📅 Month Wise & Date Filter":
         fig_comp.update_layout(barmode='group', title=f"Comparison: {label1} vs {label2}")
         st.plotly_chart(fig_comp, use_container_width=True)
 
-        st.markdown("---")
-        st.subheader("3. Sales Person Wise Summary & Comparison")
-        
-        sp_1 = df1.groupby('SELLER NAME').agg(OrderedQty1=('PO QTY (MT)', 'sum'), Dispatched1=('DISP.QTY', 'sum'), Pending1=('ACTIVE_PENDING_QTY', 'sum')).reset_index()
-        sp_2 = df2.groupby('SELLER NAME').agg(OrderedQty2=('PO QTY (MT)', 'sum'), Dispatched2=('DISP.QTY', 'sum'), Pending2=('ACTIVE_PENDING_QTY', 'sum')).reset_index()
-        sp_comp = pd.merge(sp_1, sp_2, on='SELLER NAME', how='outer').fillna(0)
-        sp_comp['Ordered Diff'] = sp_comp['OrderedQty2'] - sp_comp['OrderedQty1']
-        sp_comp['Ordered % Change'] = np.where(sp_comp['OrderedQty1'] == 0, 100.0, (sp_comp['Ordered Diff'] / sp_comp['OrderedQty1']) * 100)
-        
-        sp_display_table = pd.DataFrame({
-            'Sales Person': sp_comp['SELLER NAME'],
-            f'Ordered ({label1})': sp_comp['OrderedQty1'],
-            f'Ordered ({label2})': sp_comp['OrderedQty2'],
-            'Ordered Diff': sp_comp['Ordered Diff'],
-            'Ordered % Var': sp_comp['Ordered % Change'].round(1),
-            f'Dispatched ({label1})': sp_comp['Dispatched1'],
-            f'Dispatched ({label2})': sp_comp['Dispatched2'],
-            f'Pending ({label1})': sp_comp['Pending1'],
-            f'Pending ({label2})': sp_comp['Pending2']
-        })
-        st.write(f"**Comparison Matrix: Sales Person Wise ({label1} vs {label2})**")
-        st.dataframe(sp_display_table, use_container_width=True)
-
-        st.markdown("---")
-        st.subheader("4. Party Wise Summary & Comparison")
-        
-        party_1 = df1.groupby('PARTY NAME').agg(OrderedQty1=('PO QTY (MT)', 'sum'), Dispatched1=('DISP.QTY', 'sum'), Pending1=('ACTIVE_PENDING_QTY', 'sum')).reset_index()
-        party_2 = df2.groupby('PARTY NAME').agg(OrderedQty2=('PO QTY (MT)', 'sum'), Dispatched2=('DISP.QTY', 'sum'), Pending2=('ACTIVE_PENDING_QTY', 'sum')).reset_index()
-        party_comp = pd.merge(party_1, party_2, on='PARTY NAME', how='outer').fillna(0)
-        party_comp['Ordered Diff'] = party_comp['OrderedQty2'] - party_comp['OrderedQty1']
-        party_comp['Ordered % Change'] = np.where(party_comp['OrderedQty1'] == 0, 100.0, (party_comp['Ordered Diff'] / party_comp['OrderedQty1']) * 100)
-        
-        party_display_table = pd.DataFrame({
-            'Party Name': party_comp['PARTY NAME'],
-            f'Ordered ({label1})': party_comp['OrderedQty1'],
-            f'Ordered ({label2})': party_comp['OrderedQty2'],
-            'Ordered Diff': party_comp['Ordered Diff'],
-            'Ordered % Var': party_comp['Ordered % Change'].round(1),
-            f'Dispatched ({label1})': party_comp['Dispatched1'],
-            f'Dispatched ({label2})': party_comp['Dispatched2'],
-            f'Pending ({label1})': party_comp['Pending1'],
-            f'Pending ({label2})': party_comp['Pending2']
-        })
-        st.write(f"**Comparison Matrix: Party Wise ({label1} vs {label2})**")
-        st.dataframe(party_display_table, use_container_width=True)
-
-        st.markdown("---")
-        st.subheader("5. Detailed Item, Thickness & Width Summary Comparison")
-        
-        item_1 = df1.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(OrderedQty1=('PO QTY (MT)', 'sum'), Dispatched1=('DISP.QTY', 'sum'), Pending1=('ACTIVE_PENDING_QTY', 'sum')).reset_index()
-        item_2 = df2.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(OrderedQty2=('PO QTY (MT)', 'sum'), Dispatched2=('DISP.QTY', 'sum'), Pending2=('ACTIVE_PENDING_QTY', 'sum')).reset_index()
-        item_comp = pd.merge(item_1, item_2, on=['ITEM', 'THICKNESS_MM', 'WIDTH_MM'], how='outer').fillna(0)
-        item_comp['Ordered Diff'] = item_comp['OrderedQty2'] - item_comp['OrderedQty1']
-        item_comp['Ordered % Change'] = np.where(item_comp['OrderedQty1'] == 0, 100.0, (item_comp['Ordered Diff'] / item_comp['OrderedQty1']) * 100)
-        
-        item_display_table = pd.DataFrame({
-            'Item': item_comp['ITEM'],
-            'Thickness (mm)': item_comp['THICKNESS_MM'],
-            'Width (mm)': item_comp['WIDTH_MM'],
-            f'Ordered ({label1})': item_comp['OrderedQty1'],
-            f'Ordered ({label2})': item_comp['OrderedQty2'],
-            'Ordered Diff (+/-)': item_comp['Ordered Diff'],
-            'Ordered % Var': item_comp['Ordered % Change'].round(1),
-            f'Dispatched ({label1})': item_comp['Dispatched1'],
-            f'Dispatched ({label2})': item_comp['Dispatched2'],
-            f'Pending ({label1})': item_comp['Pending1'],
-            f'Pending ({label2})': item_comp['Pending2']
-        })
-        st.write(f"**Unified Comparison Matrix: Item, Thickness & Width ({label1} vs {label2})**")
-        st.dataframe(item_display_table, use_container_width=True)
-
-        st.markdown("---")
-        st.subheader("📥 Download Comparison PDF Report")
-        
-        comp_chart_buf = make_comparison_bar_chart_bytes(
-            label1, label2, kpi1, kpi2, f"Comparison: {label1} vs {label2}"
-        )
-        
-        comparison_tables_dict = {
-            "Comparison Summary Metrics": comp_df,
-            f"Sales Person Comparison Matrix": sp_display_table,
-            f"Party Wise Comparison Matrix": party_display_table,
-            f"Item/Thickness/Width Comparison Matrix": item_display_table
-        }
-        
-        comp_pdf_bytes = generate_exact_screen_pdf(
-            f"Comparison ({label1} vs {label2})",
-            {f"Summary": f"Comparing {label1} and {label2}"},
-            {"Comparison Chart": comp_chart_buf},
-            comparison_tables_dict
-        )
-        st.download_button(
-            "📥 Download Comparison PDF Report",
-            data=comp_pdf_bytes,
-            file_name=f"Comparison_Report_{str(label1).replace('/', '-')}_vs_{str(label2).replace('/', '-')}.pdf",
-            mime="application/pdf"
-        )
-
 # =========================================================
 # SECTION 2: ALL SALES & DISPATCH ANALYTICS
 # =========================================================
@@ -618,71 +520,105 @@ elif section == "📊 All Sales & Dispatch Analytics":
     st.subheader("1. Key Performance Indicators (KPIs)")
     kpis = calculate_kpis(df)
     
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Overall PO Count", f"{kpis['Overall PO Count']:,}")
-    c2.metric("Overall DO Count", f"{kpis['Overall DO Count']:,}")
-    c3.metric("Number of Parties", f"{kpis['Number of Parties']:,}")
-    c4.metric("Total PO Qty (MT)", f"{kpis['Total PO Quantity (MT)']:,.2f}")
+    # Initialize session state for KPI drill-down if not present
+    if 'active_kpi_drill' not in st.session_state:
+        st.session_state.active_kpi_drill = None
+
+    st.markdown("👉 **Click any KPI card below to instantly open its detailed records:**")
     
-    c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Total Amount (PO Qty × Rate)", f"₹{kpis['Total PO Amount']:,.2f}")
-    c6.metric("Sum of Dispatched Qty (MT)", f"{kpis['Dispatched Qty (MT)']:,.2f}")
-    c7.metric("Sum of Cancelled Qty (MT)", f"{kpis['Cancelled Qty (MT)']:,.2f}")
-    c8.metric("Sum of Active Pending Qty (MT)", f"{kpis['Pending Qty (MT)']:,.2f}")
-    
+    # Row 1 of KPI Cards
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if st.button(f"📌 Overall PO Count\n\n**{kpis['Overall PO Count']:,}**", use_container_width=True):
+            st.session_state.active_kpi_drill = "Overall PO Count"
+    with col2:
+        if st.button(f"📌 Overall DO Count\n\n**{kpis['Overall DO Count']:,}**", use_container_width=True):
+            st.session_state.active_kpi_drill = "Overall DO Count"
+    with col3:
+        if st.button(f"📌 Number of Parties\n\n**{kpis['Number of Parties']:,}**", use_container_width=True):
+            st.session_state.active_kpi_drill = "Number of Parties"
+    with col4:
+        if st.button(f"📌 Total PO Qty (MT)\n\n**{kpis['Total PO Quantity (MT)']:,.2f}**", use_container_width=True):
+            st.session_state.active_kpi_drill = "Total PO Qty (MT)"
+
+    # Row 2 of KPI Cards
+    col5, col6, col7, col8 = st.columns(4)
+    with col5:
+        if st.button(f"📌 Total Amount (₹)\n\n**₹{kpis['Total PO Amount']:,.2f}**", use_container_width=True):
+            st.session_state.active_kpi_drill = "Total Amount"
+    with col6:
+        if st.button(f"📌 Dispatched Qty (MT)\n\n**{kpis['Dispatched Qty (MT)']:,.2f}**", use_container_width=True):
+            st.session_state.active_kpi_drill = "Dispatched Qty"
+    with col7:
+        if st.button(f"📌 Cancelled Qty (MT)\n\n**{kpis['Cancelled Qty (MT)']:,.2f}**", use_container_width=True):
+            st.session_state.active_kpi_drill = "Cancelled Qty"
+    with col8:
+        if st.button(f"📌 Active Pending Qty (MT)\n\n**{kpis['Pending Qty (MT)']:,.2f}**", use_container_width=True):
+            st.session_state.active_kpi_drill = "Pending Qty"
+
     # ---------------------------------------------------------
-    # KPI LINKING / DRILL-DOWN FEATURE
+    # DISPLAY LINKED DETAILS BASED ON CLICKED KPI CARD
     # ---------------------------------------------------------
-    st.markdown("---")
-    st.subheader("🔍 Click / Open a KPI to View Linked Details")
-    
-    selected_kpi_drill = st.selectbox(
-        "Select KPI to open its detailed transaction records:",
-        [
-            "All Transactions",
-            "Dispatched Orders (DISP.QTY > 0)",
-            "Cancelled Orders (IS_CANCELLED)",
-            "Pending Orders (ACTIVE_PENDING_QTY > 0)",
-            "Sales Executive Breakdown",
-            "Party-Wise Breakdown"
-        ]
-    )
-    
-    if selected_kpi_drill == "All Transactions":
-        st.write(f"**Showing All Records ({len(df)} rows)**")
-        st.dataframe(df, use_container_width=True)
-    elif selected_kpi_drill == "Dispatched Orders (DISP.QTY > 0)":
-        disp_subset = df[df['DISP.QTY'] > 0]
-        st.write(f"**Linked Details: Dispatched Orders ({len(disp_subset)} rows | Total: {disp_subset['DISP.QTY'].sum():,.2f} MT)**")
-        st.dataframe(disp_subset[['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING', 'STATUS', 'REMARK']], use_container_width=True)
-    elif selected_kpi_drill == "Cancelled Orders (IS_CANCELLED)":
-        canc_subset = df[df['IS_CANCELLED']]
-        st.write(f"**Linked Details: Cancelled Orders ({len(canc_subset)} rows | Total: {canc_subset['CANCELLED_QTY'].sum():,.2f} MT)**")
-        st.dataframe(canc_subset[['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'STATUS', 'REMARK']], use_container_width=True)
-    elif selected_kpi_drill == "Pending Orders (ACTIVE_PENDING_QTY > 0)":
-        pend_subset = df[df['ACTIVE_PENDING_QTY'] > 0]
-        st.write(f"**Linked Details: Pending Orders ({len(pend_subset)} rows | Total: {pend_subset['ACTIVE_PENDING_QTY'].sum():,.2f} MT)**")
-        st.dataframe(pend_subset[['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'ACTIVE_PENDING_QTY', 'REMARK']], use_container_width=True)
-    elif selected_kpi_drill == "Sales Executive Breakdown":
-        st.write("**Linked Details: Sales Executive Summary**")
-        sp_summary = df.groupby('SELLER NAME').agg(
-            TotalPOs=('PO NO', 'nunique'),
-            OrderedQty=('PO QTY (MT)', 'sum'),
-            DispatchedQty=('DISP.QTY', 'sum'),
-            PendingQty=('ACTIVE_PENDING_QTY', 'sum'),
-            TotalAmount=('AMOUNT', 'sum')
-        ).reset_index()
-        st.dataframe(sp_summary, use_container_width=True)
-    elif selected_kpi_drill == "Party-Wise Breakdown":
-        st.write("**Linked Details: Party-Wise Summary**")
-        party_summary = df.groupby('PARTY NAME').agg(
-            TotalPOs=('PO NO', 'nunique'),
-            OrderedQty=('PO QTY (MT)', 'sum'),
-            DispatchedQty=('DISP.QTY', 'sum'),
-            PendingQty=('ACTIVE_PENDING_QTY', 'sum'),
-            TotalAmount=('AMOUNT', 'sum')
-        ).reset_index()
-        st.dataframe(party_summary, use_container_width=True)
+    if st.session_state.active_kpi_drill:
+        st.markdown("---")
+        col_title_col, col_close_col = st.columns([8, 1])
+        with col_title_col:
+            st.subheader(f"🔍 Drill-Down Details: {st.session_state.active_kpi_drill}")
+        with col_close_col:
+            if st.button("❌ Close", use_container_width=True):
+                st.session_state.active_kpi_drill = None
+                st.rerun()
+
+        drill = st.session_state.active_kpi_drill
+        if drill == "Overall PO Count":
+            po_summary = df.groupby('PO NO').agg(
+                PO_Date=('PO_DATE_STR', 'first'),
+                Party=('PARTY NAME', 'first'),
+                Seller=('SELLER NAME', 'first'),
+                Total_Ordered_Qty=('PO QTY (MT)', 'sum'),
+                Total_Amount=('AMOUNT', 'sum'),
+                Status=('STATUS', 'first')
+            ).reset_index()
+            st.dataframe(po_summary, use_container_width=True)
+
+        elif drill == "Overall DO Count":
+            do_summary = df[df['DO NO'] != 'N/A'].groupby('DO NO').agg(
+                PO_NO=('PO NO', 'first'),
+                Party=('PARTY NAME', 'first'),
+                Item=('ITEM', 'first'),
+                Ordered_Qty=('PO QTY (MT)', 'sum'),
+                Dispatched_Qty=('DISP.QTY', 'sum'),
+                Pending_Qty=('ACTIVE_PENDING_QTY', 'sum')
+            ).reset_index()
+            st.dataframe(do_summary, use_container_width=True)
+
+        elif drill == "Number of Parties":
+            party_summary = df.groupby('PARTY NAME').agg(
+                Total_POs=('PO NO', 'nunique'),
+                OrderedQty=('PO QTY (MT)', 'sum'),
+                DispatchedQty=('DISP.QTY', 'sum'),
+                PendingQty=('ACTIVE_PENDING_QTY', 'sum'),
+                TotalAmount=('AMOUNT', 'sum')
+            ).reset_index()
+            st.dataframe(party_summary, use_container_width=True)
+
+        elif drill in ["Total PO Qty (MT)", "Total Amount"]:
+            st.dataframe(df, use_container_width=True)
+
+        elif drill == "Dispatched Qty":
+            disp_subset = df[df['DISP.QTY'] > 0]
+            st.write(f"Showing **{len(disp_subset)}** rows where Dispatched Qty > 0")
+            st.dataframe(disp_subset[['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING', 'STATUS', 'REMARK']], use_container_width=True)
+
+        elif drill == "Cancelled Qty":
+            canc_subset = df[df['IS_CANCELLED']]
+            st.write(f"Showing **{len(canc_subset)}** cancelled records")
+            st.dataframe(canc_subset[['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'STATUS', 'REMARK']], use_container_width=True)
+
+        elif drill == "Pending Qty":
+            pend_subset = df[df['ACTIVE_PENDING_QTY'] > 0]
+            st.write(f"Showing **{len(pend_subset)}** active pending records")
+            st.dataframe(pend_subset[['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'ACTIVE_PENDING_QTY', 'REMARK']], use_container_width=True)
 
     st.markdown("---")
     
@@ -708,88 +644,6 @@ elif section == "📊 All Sales & Dispatch Analytics":
     ).reset_index()
     st.write("**Sales Executive Item-Wise Breakdown**")
     st.dataframe(sp_item_grp, use_container_width=True)
-    
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.write("**Cancelled Orders per Sales Person**")
-        sp_cancelled = df[df['IS_CANCELLED']].groupby('SELLER NAME').agg(
-            CancelledOrders=('PO NO', 'nunique'),
-            CancelledQty=('CANCELLED_QTY', 'sum')
-        ).reset_index()
-        st.dataframe(sp_cancelled, use_container_width=True)
-        
-    with col_b:
-        st.write("**Pending Orders per Sales Person**")
-        sp_pending = df[df['ACTIVE_PENDING_QTY'] > 0].groupby('SELLER NAME').agg(
-            PendingOrders=('PO NO', 'nunique'),
-            PendingQty=('ACTIVE_PENDING_QTY', 'sum')
-        ).reset_index()
-        st.dataframe(sp_pending, use_container_width=True)
-        
-    col_c, col_d = st.columns(2)
-    with col_c:
-        sp_disp = df.groupby('SELLER NAME')['DISP.QTY'].sum().reset_index()
-        fig_disp = px.bar(
-            sp_disp, 
-            x='SELLER NAME', 
-            y='DISP.QTY', 
-            title="Dispatched Qty by Sales Person", 
-            text_auto=',.1f',
-            color_discrete_sequence=['#10B981']
-        )
-        fig_disp.update_traces(textposition='outside')
-        st.plotly_chart(fig_disp, use_container_width=True)
-        
-    with col_d:
-        sp_rec = df.groupby('SELLER NAME')['PO QTY (MT)'].sum().reset_index()
-        fig_rec = px.bar(
-            sp_rec, 
-            x='SELLER NAME', 
-            y='PO QTY (MT)', 
-            title="Order Received Qty by Sales Person", 
-            text_auto=',.1f',
-            color_discrete_sequence=['#3B82F6']
-        )
-        fig_rec.update_traces(textposition='outside')
-        st.plotly_chart(fig_rec, use_container_width=True)
-
-    st.markdown("---")
-    
-    st.subheader("3. Party Wise Analytics")
-    party_grp = df.groupby(['PARTY NAME', 'SELLER NAME']).agg(
-        OrderedQty=('PO QTY (MT)', 'sum'),
-        DispatchedQty=('DISP.QTY', 'sum'),
-        CancelledQty=('CANCELLED_QTY', 'sum'),
-        PendingQty=('ACTIVE_PENDING_QTY', 'sum')
-    ).reset_index()
-    
-    all_parties = ["All"] + sorted(party_grp['PARTY NAME'].unique().tolist())
-    selected_party = st.selectbox("Filter by Party Name", all_parties)
-    
-    filtered_party_grp = party_grp if selected_party == "All" else party_grp[party_grp['PARTY NAME'] == selected_party]
-    st.dataframe(filtered_party_grp, use_container_width=True)
-
-    st.markdown("---")
-    
-    st.subheader("4. Detailed Item, Thickness & Width Summary")
-    item_spec_grp = df.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
-        OrderedQty=('PO QTY (MT)', 'sum'),
-        DispatchedQty=('DISP.QTY', 'sum'),
-        CancelledQty=('CANCELLED_QTY', 'sum'),
-        PendingQty=('ACTIVE_PENDING_QTY', 'sum')
-    ).reset_index()
-    
-    item_spec_grp.rename(columns={
-        'ITEM': 'Item Name',
-        'THICKNESS_MM': 'Thickness (mm)',
-        'WIDTH_MM': 'Width (mm)',
-        'OrderedQty': 'Ordered Qty (MT)',
-        'DispatchedQty': 'Dispatched Qty (MT)',
-        'CancelledQty': 'Cancelled Qty (MT)',
-        'PendingQty': 'Pending Qty (MT)'
-    }, inplace=True)
-
-    st.dataframe(item_spec_grp, use_container_width=True)
 
 # =========================================================
 # SECTION 3: PENDING DISPATCH
