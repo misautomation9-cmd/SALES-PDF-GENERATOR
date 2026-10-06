@@ -109,6 +109,7 @@ def load_and_clean_sheet(file_bytes, sheet_name):
         df['DATE'] = pd.to_datetime(disp_date_clean, dayfirst=True, errors='coerce')
     
     df['PO_DATE_STR'] = df['PO DATE'].dt.strftime('%d/%m/%Y').fillna('N/A')
+    df['DISP_DATE_STR'] = df['DATE'].dt.strftime('%d/%m/%Y').fillna('N/A')
     df['AMOUNT'] = df['PO QTY (MT)'] * df['PER TON']
     
     str_cols = ['PARTY NAME', 'SELLER NAME', 'ITEM', 'STATUS', 'REMARK', 'BROKER', 'SECTOR', 'PLACE', 'PO NO', 'DO NO', 'THICKNESS']
@@ -506,6 +507,18 @@ if section == "📅 Month Wise & Date Filter":
         fig_comp.update_layout(barmode='group', title=f"Comparison: {label1} vs {label2}")
         st.plotly_chart(fig_comp, use_container_width=True)
 
+        # ---------------------------------------------------------
+        # ADDED: Detailed Sales & Dispatch Records for Comparison
+        # ---------------------------------------------------------
+        st.markdown("---")
+        st.subheader(f"📋 Detailed Sales & Dispatch Records: {label1}")
+        detail_cols = [c for c in ['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING', 'STATUS'] if c in df1.columns]
+        st.dataframe(df1[detail_cols], use_container_width=True)
+
+        st.subheader(f"📋 Detailed Sales & Dispatch Records: {label2}")
+        detail_cols2 = [c for c in ['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING', 'STATUS'] if c in df2.columns]
+        st.dataframe(df2[detail_cols2], use_container_width=True)
+
         st.markdown("---")
         st.subheader("📥 Download Comparison PDF Report")
         
@@ -513,11 +526,18 @@ if section == "📅 Month Wise & Date Filter":
             label1, label2, kpi1, kpi2, f"Comparison: {label1} vs {label2}"
         )
         
+        # Include detailed sales & dispatch tables in the PDF export
+        comparison_tables_dict = {
+            "Comparison Summary Metrics": comp_df,
+            f"Sales & Dispatch Details — {label1}": df1[detail_cols],
+            f"Sales & Dispatch Details — {label2}": df2[detail_cols2]
+        }
+        
         comp_pdf_bytes = generate_exact_screen_pdf(
             f"Comparison ({label1} vs {label2})",
             {f"Summary": f"Comparing {label1} and {label2}"},
             {"Comparison Chart": comp_chart_buf},
-            {"Comparison Metrics Table": comp_df}
+            comparison_tables_dict
         )
         st.download_button(
             "📥 Download Comparison PDF Report",
