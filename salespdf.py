@@ -471,6 +471,7 @@ if section == "📅 Month Wise & Date Filter":
         kpi1 = calculate_kpis(df1)
         kpi2 = calculate_kpis(df2)
         
+        st.subheader("1. Key Performance Indicators (KPIs) Comparison")
         comp_df = pd.DataFrame({
             "Metric": ["Total PO Count", "Ordered Qty (MT)", "Dispatched Qty (MT)", "Cancelled Qty (MT)", "Pending Qty (MT)", "Total Amount (₹)", "Parties Count"],
             f"{label1}": [kpi1['Overall PO Count'], kpi1['Total PO Quantity (MT)'], kpi1['Dispatched Qty (MT)'], kpi1['Cancelled Qty (MT)'], kpi1['Pending Qty (MT)'], kpi1['Total PO Amount'], kpi1['Number of Parties']],
@@ -485,9 +486,9 @@ if section == "📅 Month Wise & Date Filter":
                 kpi2['Number of Parties'] - kpi1['Number of Parties']
             ]
         })
-        
         st.table(comp_df)
         
+        st.subheader("2. Visual Analytics Comparison")
         fig_comp = go.Figure(data=[
             go.Bar(
                 name=str(label1), 
@@ -508,16 +509,67 @@ if section == "📅 Month Wise & Date Filter":
         st.plotly_chart(fig_comp, use_container_width=True)
 
         # ---------------------------------------------------------
-        # ADDED: Detailed Sales & Dispatch Records for Comparison
+        # AGGREGATED COMPARISONS (Sales Exec, Party-Wise, Item/Thickness/Width)
         # ---------------------------------------------------------
         st.markdown("---")
-        st.subheader(f"📋 Detailed Sales & Dispatch Records: {label1}")
-        detail_cols = [c for c in ['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING', 'STATUS'] if c in df1.columns]
-        st.dataframe(df1[detail_cols], use_container_width=True)
+        st.subheader("3. Sales Executive Analytics Comparison")
+        c_se1, c_se2 = st.columns(2)
+        with c_se1:
+            st.write(f"**Sales Executive Summary — {label1}**")
+            sp_summary_1 = df1.groupby('SELLER NAME').agg(
+                OrderedQty=('PO QTY (MT)', 'sum'),
+                Dispatched=('DISP.QTY', 'sum'),
+                Pending=('ACTIVE_PENDING_QTY', 'sum')
+            ).reset_index()
+            st.dataframe(sp_summary_1, use_container_width=True)
+        with c_se2:
+            st.write(f"**Sales Executive Summary — {label2}**")
+            sp_summary_2 = df2.groupby('SELLER NAME').agg(
+                OrderedQty=('PO QTY (MT)', 'sum'),
+                Dispatched=('DISP.QTY', 'sum'),
+                Pending=('ACTIVE_PENDING_QTY', 'sum')
+            ).reset_index()
+            st.dataframe(sp_summary_2, use_container_width=True)
 
-        st.subheader(f"📋 Detailed Sales & Dispatch Records: {label2}")
-        detail_cols2 = [c for c in ['PO NO', 'DO NO', 'PO_DATE_STR', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'PENDING', 'STATUS'] if c in df2.columns]
-        st.dataframe(df2[detail_cols2], use_container_width=True)
+        st.markdown("---")
+        st.subheader("4. Party-Wise Analytics Comparison")
+        c_p1, c_p2 = st.columns(2)
+        with c_p1:
+            st.write(f"**Party-Wise Summary — {label1}**")
+            party_summary_1 = df1.groupby('PARTY NAME').agg(
+                OrderedQty=('PO QTY (MT)', 'sum'),
+                Dispatched=('DISP.QTY', 'sum'),
+                Pending=('ACTIVE_PENDING_QTY', 'sum')
+            ).reset_index()
+            st.dataframe(party_summary_1, use_container_width=True)
+        with c_p2:
+            st.write(f"**Party-Wise Summary — {label2}**")
+            party_summary_2 = df2.groupby('PARTY NAME').agg(
+                OrderedQty=('PO QTY (MT)', 'sum'),
+                Dispatched=('DISP.QTY', 'sum'),
+                Pending=('ACTIVE_PENDING_QTY', 'sum')
+            ).reset_index()
+            st.dataframe(party_summary_2, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("5. Detailed Item, Thickness & Width Summary Comparison")
+        c_i1, c_i2 = st.columns(2)
+        with c_i1:
+            st.write(f"**Item/Thickness/Width Summary — {label1}**")
+            item_summary_1 = df1.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
+                OrderedQty=('PO QTY (MT)', 'sum'),
+                Dispatched=('DISP.QTY', 'sum'),
+                Pending=('ACTIVE_PENDING_QTY', 'sum')
+            ).reset_index()
+            st.dataframe(item_summary_1, use_container_width=True)
+        with c_i2:
+            st.write(f"**Item/Thickness/Width Summary — {label2}**")
+            item_summary_2 = df2.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
+                OrderedQty=('PO QTY (MT)', 'sum'),
+                Dispatched=('DISP.QTY', 'sum'),
+                Pending=('ACTIVE_PENDING_QTY', 'sum')
+            ).reset_index()
+            st.dataframe(item_summary_2, use_container_width=True)
 
         st.markdown("---")
         st.subheader("📥 Download Comparison PDF Report")
@@ -526,11 +578,15 @@ if section == "📅 Month Wise & Date Filter":
             label1, label2, kpi1, kpi2, f"Comparison: {label1} vs {label2}"
         )
         
-        # Include detailed sales & dispatch tables in the PDF export
+        # Build concise analytical comparison tables for the PDF
         comparison_tables_dict = {
             "Comparison Summary Metrics": comp_df,
-            f"Sales & Dispatch Details — {label1}": df1[detail_cols],
-            f"Sales & Dispatch Details — {label2}": df2[detail_cols2]
+            f"Sales Executive Summary — {label1}": sp_summary_1,
+            f"Sales Executive Summary — {label2}": sp_summary_2,
+            f"Party-Wise Summary — {label1}": party_summary_1,
+            f"Party-Wise Summary — {label2}": party_summary_2,
+            f"Item/Thickness/Width Summary — {label1}": item_summary_1,
+            f"Item/Thickness/Width Summary — {label2}": item_summary_2
         }
         
         comp_pdf_bytes = generate_exact_screen_pdf(
@@ -776,7 +832,7 @@ elif section == "🚚 Pending Dispatch":
     
     c1, c2, c3 = st.columns(3)
     c1.metric("Pending DOs Count", f"{pd_kpis['Delivery Orders (DOs)']:,}")
-    c2.metric("Pending POs Count", f"{pd_kpis['Purchase Orders (POs)']:,}")
+    c2.metric("Pending POs Count", f"{pd_kpis['Pending POs (POs)']:,}") if 'Pending POs (POs)' in pd_kpis else c2.metric("Pending POs Count", f"{pd_kpis['Purchase Orders (POs)']:,}")
     c3.metric("Parties Impacted", f"{pd_kpis['Parties Impacted']:,}")
 
     c4, c5, c6 = st.columns(3)
