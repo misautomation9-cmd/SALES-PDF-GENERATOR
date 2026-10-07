@@ -89,6 +89,12 @@ def load_and_clean_sheet(file_bytes, sheet_name):
         if std_col not in df.columns:
             df[std_col] = np.nan
 
+    # ---------------------------------------------------------
+    # FORWARD FILL DATE SO IT CONTINUES TILL THE NEXT DATE
+    # ---------------------------------------------------------
+    if 'PO DATE' in df.columns:
+        df['PO DATE'] = df['PO DATE'].ffill()
+
     numeric_cols = ['PO QTY (MT)', 'PER TON', 'DISP.QTY', 'PENDING']
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
