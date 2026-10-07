@@ -505,22 +505,20 @@ if section == "📊 All Sales & Dispatch Analysis":
 elif section == "📅 Date, Month & Year Comparison":
     st.header("📅 Date, Month & Year Comparison Analysis")
     
-    # Sheet selector added here so `df` is successfully defined
     comp_sheet = st.sidebar.selectbox("Select Sheet for Comparison", sheet_names)
     df = load_and_clean_sheet(uploaded_file, comp_sheet)
     
     comp_mode = st.radio("Select Comparison Mode", ["Date-Wise", "Month-Wise", "Year-Wise"], horizontal=True)
     
     df_valid = df.dropna(subset=['PO DATE']).copy()
-    df_valid['YEAR'] = df_valid['PO DATE'].dt.year
-    df_valid['MONTH'] = df_valid['PO DATE'].dt.month
-    df_valid['YEAR_MONTH'] = df_valid['PO DATE'].dt.strftime('%B %Y')
+    df_valid['YEAR'] = df_valid['PO DATE'].dt.year.astype(str)
+    df_valid['MONTH_YEAR'] = df_valid['PO DATE'].dt.strftime('%B %Y')
     
     if comp_mode == "Date-Wise":
         dates = sorted(df_valid['PO DATE'].dt.date.unique())
         date_strs = [d.strftime('%d/%m/%Y') for d in dates]
         if not date_strs:
-            st.warning("No valid dates found.")
+            st.warning("No valid dates found in this sheet.")
             st.stop()
         c1, c2 = st.columns(2)
         with c1: d1_str = st.selectbox("Primary Date", date_strs)
@@ -531,22 +529,22 @@ elif section == "📅 Date, Month & Year Comparison":
         lbl1, lbl2 = d1_str, d2_str
         
     elif comp_mode == "Month-Wise":
-        months = sorted(df_valid['YEAR_MONTH'].unique(), key=lambda x: pd.to_datetime(x, format='%B %Y'))
+        months = sorted(df_valid['MONTH_YEAR'].unique(), key=lambda x: pd.to_datetime(x, format='%B %Y'))
         if not months:
-            st.warning("No valid months found.")
+            st.warning("No valid months found in this sheet.")
             st.stop()
         c1, c2 = st.columns(2)
         with c1: m1 = st.selectbox("Primary Month", months, index=len(months)-1 if len(months)>0 else 0)
         with c2: m2 = st.selectbox("Comparison Month", months, index=0)
         
-        df1 = df_valid[df_valid['YEAR_MONTH'] == m1]
-        df2 = df_valid[df_valid['YEAR_MONTH'] == m2]
+        df1 = df_valid[df_valid['MONTH_YEAR'] == m1]
+        df2 = df_valid[df_valid['MONTH_YEAR'] == m2]
         lbl1, lbl2 = m1, m2
         
     else:
         years = sorted(df_valid['YEAR'].unique())
         if not years:
-            st.warning("No valid years found.")
+            st.warning("No valid years found in this sheet.")
             st.stop()
         c1, c2 = st.columns(2)
         with c1: y1 = st.selectbox("Primary Year", years, index=len(years)-1 if len(years)>0 else 0)
@@ -554,12 +552,47 @@ elif section == "📅 Date, Month & Year Comparison":
         
         df1 = df_valid[df_valid['YEAR'] == y1]
         df2 = df_valid[df_valid['YEAR'] == y2]
-        lbl1, lbl2 = str(y1), str(y2)
+        lbl1, lbl2 = y1, y2
 
     kpi1 = calculate_kpis(df1)
     kpi2 = calculate_kpis(df2)
     
-    st.subheader(f"Key Metrics Comparison ({lbl1} vs {lbl2})")
+    if 'active_comp_drill' not in st.session_state:
+        st.session_state.active_comp_drill = None
+
+    st.markdown(f"### 📊 Key Metrics Comparison ({lbl1} vs {lbl2})")
+    st.markdown("👉 **Click any comparison metric card below to open detailed records:**")
+
+    cc1, cc2, cc3, cc4 = st.columns(4)
+    with cc1:
+        if st.button(f"📌 Ordered Qty:\n{lbl1}: {kpi1['Total PO Quantity (MT)']:,.1f} MT\n{lbl2}: {kpi2['Total PO Quantity (MT)']:,.1f} MT", use_container_width=True):
+            st.session_state.active_comp_drill = "Ordered Qty"
+    with cc2:
+        if st.button(f"📌 Dispatched Qty:\n{lbl1}: {kpi1['Dispatched Qty (MT)']:,.1f} MT\n{lbl2}: {kpi2['Dispatched Qty (MT)']:,.1f} MT", use_container_width=True):
+            st.session_state.active_comp_drill = "Dispatched Qty"
+    with cc3:
+        if st.button(f"📌 Cancelled Qty:\n{lbl1}: {kpi1['Cancelled Qty (MT)']:,.1f} MT\n{lbl2}: {kpi2['Cancelled Qty (MT)']:,.1f} MT", use_container_width=True):
+            st.session_state.active_comp_drill = "Cancelled Qty"
+    with cc4:
+        if st.button(f"📌 Pending Qty:\n{lbl1}: {kpi1['Pending Qty (MT)']:,.1f} MT\n{lbl2}: {kpi2['Pending Qty (MT)']:,.1f} MT", use_container_width=True):
+            st.session_state.active_comp_drill = "Pending Qty"
+
+    if st.session_state.active_comp_drill:
+        st.markdown("---")
+        cd1, cd2 = st.columns([8, 1])
+        with cd1: st.subheader(f"🔍 Drill-Down Comparison: {st.session_state.active_comp_drill}")
+        with cd2:
+            if st.button("❌ Close Drill", use_container_width=True):
+                st.session_state.active_comp_drill = None
+                st.rerun()
+        
+        drill_col = st.session_state.active_comp_drill
+        st.write(f"**{lbl1} Records:**")
+        st.dataframe(df1[['PO NO', 'DO NO', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'STATUS']], use_container_width=True)
+        st.write(f"**{lbl2} Records:**")
+        st.dataframe(df2[['PO NO', 'DO NO', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'STATUS']], use_container_width=True)
+
+    st.markdown("---")
     comp_summary_df = pd.DataFrame({
         "Metric": ["PO Count", "DO Count", "Parties Count", "Ordered Qty (MT)", "Dispatched Qty (MT)", "Cancelled Qty (MT)", "Pending Qty (MT)", "Total Amount (₹)"],
         lbl1: [kpi1['Overall PO Count'], kpi1['Overall DO Count'], kpi1['Number of Parties'], kpi1['Total PO Quantity (MT)'], kpi1['Dispatched Qty (MT)'], kpi1['Cancelled Qty (MT)'], kpi1['Pending Qty (MT)'], kpi1['Total PO Amount']],
