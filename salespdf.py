@@ -512,7 +512,8 @@ elif section == "📅 Date, Month & Year Comparison":
     
     df_valid = df.dropna(subset=['PO DATE']).copy()
     df_valid['YEAR'] = df_valid['PO DATE'].dt.year.astype(str)
-    df_valid['MONTH_YEAR'] = df_valid['PO DATE'].dt.strftime('%B %Y')
+    df_valid['MONTH_NAME'] = df_valid['PO DATE'].dt.strftime('%B')
+    df_valid['MONTH_NUM'] = df_valid['PO DATE'].dt.month
     
     if comp_mode == "Date-Wise":
         dates = sorted(df_valid['PO DATE'].dt.date.unique())
@@ -529,17 +530,22 @@ elif section == "📅 Date, Month & Year Comparison":
         lbl1, lbl2 = d1_str, d2_str
         
     elif comp_mode == "Month-Wise":
-        months = sorted(df_valid['MONTH_YEAR'].unique(), key=lambda x: pd.to_datetime(x, format='%B %Y'))
-        if not months:
-            st.warning("No valid months found in this sheet.")
-            st.stop()
-        c1, c2 = st.columns(2)
-        with c1: m1 = st.selectbox("Primary Month", months, index=len(months)-1 if len(months)>0 else 0)
-        with c2: m2 = st.selectbox("Comparison Month", months, index=0)
+        available_years = sorted(df_valid['YEAR'].unique())
+        available_months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
         
-        df1 = df_valid[df_valid['MONTH_YEAR'] == m1]
-        df2 = df_valid[df_valid['MONTH_YEAR'] == m2]
-        lbl1, lbl2 = m1, m2
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            st.markdown("##### Primary Period (Month & Year)")
+            pm_y = st.selectbox("Select Primary Year", available_years, index=len(available_years)-1 if len(available_years)>0 else 0, key="pm_y")
+            pm_m = st.selectbox("Select Primary Month", available_months, index=8, key="pm_m") # Default September
+        with col_m2:
+            st.markdown("##### Comparison Period (Month & Year)")
+            cm_y = st.selectbox("Select Comparison Year", available_years, index=0, key="cm_y")
+            cm_m = st.selectbox("Select Comparison Month", available_months, index=8, key="cm_m")
+            
+        df1 = df_valid[(df_valid['YEAR'] == pm_y) & (df_valid['MONTH_NAME'] == pm_m)]
+        df2 = df_valid[(df_valid['YEAR'] == cm_y) & (df_valid['MONTH_NAME'] == cm_m)]
+        lbl1, lbl2 = f"{pm_m} {pm_y}", f"{cm_m} {cm_y}"
         
     else:
         years = sorted(df_valid['YEAR'].unique())
@@ -586,7 +592,6 @@ elif section == "📅 Date, Month & Year Comparison":
                 st.session_state.active_comp_drill = None
                 st.rerun()
         
-        drill_col = st.session_state.active_comp_drill
         st.write(f"**{lbl1} Records:**")
         st.dataframe(df1[['PO NO', 'DO NO', 'PARTY NAME', 'SELLER NAME', 'ITEM', 'PO QTY (MT)', 'DISP.QTY', 'STATUS']], use_container_width=True)
         st.write(f"**{lbl2} Records:**")
