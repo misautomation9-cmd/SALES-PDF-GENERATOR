@@ -331,7 +331,6 @@ if section == "📊 All Sales & Dispatch Analysis":
     df = load_and_clean_sheet(uploaded_file, selected_sheet)
     
     st.header(f"📊 All Sales & Dispatch Analysis — {selected_sheet}")
-    
     kpis = calculate_kpis(df)
     
     if 'active_kpi_drill' not in st.session_state:
@@ -367,7 +366,6 @@ if section == "📊 All Sales & Dispatch Analysis":
         if st.button(f"📌 Pend. Qty: {kpis['Pending Qty (MT)']:,.1f} MT", use_container_width=True):
             st.session_state.active_kpi_drill = "Pending Qty"
 
-    # Drill-down viewer (Excluded from PDF report)
     if st.session_state.active_kpi_drill:
         st.markdown("---")
         c_title, c_close = st.columns([8, 1])
@@ -396,7 +394,6 @@ if section == "📊 All Sales & Dispatch Analysis":
 
     st.markdown("---")
     
-    # Donut Chart for Status Breakdown
     fig_donut = go.Figure(data=[go.Pie(
         labels=['Dispatched Qty', 'Pending Qty', 'Cancelled Qty'],
         values=[kpis['Dispatched Qty (MT)'], kpis['Pending Qty (MT)'], kpis['Cancelled Qty (MT)']],
@@ -508,6 +505,10 @@ if section == "📊 All Sales & Dispatch Analysis":
 elif section == "📅 Date, Month & Year Comparison":
     st.header("📅 Date, Month & Year Comparison Analysis")
     
+    # Sheet selector added here so `df` is successfully defined
+    comp_sheet = st.sidebar.selectbox("Select Sheet for Comparison", sheet_names)
+    df = load_and_clean_sheet(uploaded_file, comp_sheet)
+    
     comp_mode = st.radio("Select Comparison Mode", ["Date-Wise", "Month-Wise", "Year-Wise"], horizontal=True)
     
     df_valid = df.dropna(subset=['PO DATE']).copy()
@@ -518,6 +519,9 @@ elif section == "📅 Date, Month & Year Comparison":
     if comp_mode == "Date-Wise":
         dates = sorted(df_valid['PO DATE'].dt.date.unique())
         date_strs = [d.strftime('%d/%m/%Y') for d in dates]
+        if not date_strs:
+            st.warning("No valid dates found.")
+            st.stop()
         c1, c2 = st.columns(2)
         with c1: d1_str = st.selectbox("Primary Date", date_strs)
         with c2: d2_str = st.selectbox("Comparison Date", date_strs, index=min(1, len(date_strs)-1))
@@ -528,6 +532,9 @@ elif section == "📅 Date, Month & Year Comparison":
         
     elif comp_mode == "Month-Wise":
         months = sorted(df_valid['YEAR_MONTH'].unique(), key=lambda x: pd.to_datetime(x, format='%B %Y'))
+        if not months:
+            st.warning("No valid months found.")
+            st.stop()
         c1, c2 = st.columns(2)
         with c1: m1 = st.selectbox("Primary Month", months, index=len(months)-1 if len(months)>0 else 0)
         with c2: m2 = st.selectbox("Comparison Month", months, index=0)
@@ -538,6 +545,9 @@ elif section == "📅 Date, Month & Year Comparison":
         
     else:
         years = sorted(df_valid['YEAR'].unique())
+        if not years:
+            st.warning("No valid years found.")
+            st.stop()
         c1, c2 = st.columns(2)
         with c1: y1 = st.selectbox("Primary Year", years, index=len(years)-1 if len(years)>0 else 0)
         with c2: y2 = st.selectbox("Comparison Year", years, index=0)
