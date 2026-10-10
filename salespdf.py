@@ -72,7 +72,7 @@ def load_all_sheets(file_bytes: bytes) -> dict:
 
 
 def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean column names, standardise key fields, handle datetimes safely with UTC, and cast mixed types."""
+    """Clean column names, standardise key fields, handle datetimes safely, and prevent PyArrow crashes."""
     df = df.copy()
     df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
 
@@ -109,21 +109,24 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df[col] = 0.0
 
-    # Date conversion with utc=True to avoid mixed timezone/parsing crashes
+    # Date conversion with boundary checks to prevent OutOfBoundsDatetime crashes
     for dcol in ["SO_DATE", "INVOICE_DATE"]:
         if dcol in df.columns:
-            df[dcol] = pd.to_datetime(df[dcol], errors="coerce", dayfirst=True, utc=True)
-            df[dcol] = df[dcol].dt.tz_localize(None)
+            s = pd.to_datetime(df[dcol], errors="coerce", dayfirst=True, format="mixed", utc=True)
+            s = s.dt.tz_localize(None)
+            # Restrict valid years between 2000 and 2100 to filter out corrupt/typo timestamps
+            mask = (s.dt.year >= 2000) & (s.dt.year <= 2100)
+            df[dcol] = s.where(mask, pd.NaT)
         else:
             df[dcol] = pd.NaT
 
     # Total amount
     df["TOTAL_AMOUNT"] = df["SO_QTY_(MT)"] * df["PER_TON"]
 
-    # Uppercase string columns & prevent PyArrow mixed-type serialization errors
+    # Explicit string casting for all text/ID/specification columns to avoid PyArrow serialization errors
     str_cols = [
         "STATUS", "REMARK", "CUSTOMER_NAME", "SALES_EXECUTIVE", "ITEM",
-        "GRADE", "SECTOR", "PLACE", "BROKER", "DISPATCH_THROUGH", "THIKNESS", "PO_NO", "S_NO"
+        "GRADE", "SECTOR", "PLACE", "BROKER", "DISPATCH_THROUGH", "THIKNESS", "PO_NO", "S_NO", "SIZE_(MM)"
     ]
     for col in str_cols:
         if col in df.columns:
@@ -132,16 +135,12 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df[col] = ""
 
-    # Extract width from SIZE_(MM) — e.g., "1250X5635" → Width = 1250
+    # Extract width safely from SIZE_(MM)
     if "SIZE_(MM)" in df.columns:
-        df["WIDTH"] = (
-            df["SIZE_(MM)"]
-            .str.extract(r"(\d+)\s*X", expand=False)
-        )
+        df["WIDTH"] = df["SIZE_(MM)"].str.extract(r"(\d+)\s*X", expand=False)
         df["WIDTH"] = pd.to_numeric(df["WIDTH"], errors="coerce").fillna(0)
     else:
         df["WIDTH"] = 0.0
-        df["SIZE_(MM)"] = ""
 
     # Status Flags
     df["IS_CANCEL"] = df["STATUS"].str.contains("CANCEL", na=False) | df["REMARK"].str.contains("CANCEL", na=False)
