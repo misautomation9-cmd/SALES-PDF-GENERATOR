@@ -23,7 +23,7 @@ st.set_page_config(
 st.title("📊 Ironmart Sales & Dispatch Analytics Dashboard")
 
 # ---------------------------------------------------------
-# Flexible Header Mapping & Normalization
+# Flexible Header Mapping & Normalization (Fixed DISPATCH_QTY)
 # ---------------------------------------------------------
 EXPECTED_COLUMNS = {
     'S_NO': ['s_no', 's.no', 'sr no', 'serial no', 'sno', 's_no.', 'sr no.'],
@@ -43,7 +43,7 @@ EXPECTED_COLUMNS = {
     'PER_TON': ['per_ton', 'per ton', 'rate', 'price/ton', 'rate per ton'],
     'INVOICE_NO': ['invoice_no', 'inv no.', 'inv no', 'invoice no', 'inv_no'],
     'INVOICE_DATE': ['invoice_date', 'date', 'disp date', 'dispatch date', 'inv date'],
-    'DISP.QTY': ['disp.qty', 'disp qty', 'dispatched qty', 'disp_qty'],
+    'DISP.QTY': ['dispatch_qty', 'disp.qty', 'disp qty', 'dispatched qty', 'disp_qty'],
     'PENDING': ['pending', 'pending qty', 'bal qty'],
     'PAYMENT': ['payment', 'payment mode', 'terms'],
     'DISPATCH_THROUGH': ['dispatch_through', 'disp. th.', 'disp th', 'dispatch through', 'disp_th'],
@@ -229,7 +229,6 @@ def generate_dashboard_pdf(sheet_name, kpis, chart_buffers, tables_dict):
     story.append(Paragraph(f"<b>📊 Dispatch & Executive Report — {sheet_name}</b>", title_style))
     story.append(Spacer(1, 4))
     
-    # KPIs Table
     if kpis:
         story.append(Paragraph("<b>1. Key Performance Indicators (KPIs)</b>", section_style))
         kpi_items = [(k, f"{v:,.2f}" if isinstance(v, float) else f"{v:,}") for k, v in kpis.items()]
@@ -256,7 +255,6 @@ def generate_dashboard_pdf(sheet_name, kpis, chart_buffers, tables_dict):
         story.append(t_kpi)
         story.append(Spacer(1, 8))
 
-    # Visual Charts
     if chart_buffers:
         story.append(Paragraph("<b>2. Visual Analytics & Charts</b>", section_style))
         for fig_title, buf in chart_buffers.items():
@@ -268,7 +266,6 @@ def generate_dashboard_pdf(sheet_name, kpis, chart_buffers, tables_dict):
                     Spacer(1, 6)
                 ]))
 
-    # Detailed Tables at the End
     story.append(Paragraph("<b>3. Detailed Data Tables</b>", section_style))
     for title, df_table in tables_dict.items():
         if df_table is not None and not df_table.empty:
@@ -331,44 +328,51 @@ if section == "1) Dispatch & Executive Analysis":
         'New Parties Added': new_customers_count
     }
 
-    st.subheader("📌 Key Performance Indicators")
+    st.subheader("📌 Key Performance Indicators (Click any metric card below to inspect details)")
     
-    # Readable Metric Cards (Clickable via Session State)
-    if 'active_drilldown' not in st.session_state:
-        st.session_state.active_drilldown = None
+    # Readable Clickable Selectors for KPIs
+    kpi_choice = st.selectbox("Select KPI to View Details", [
+        "Select to view details...",
+        f"1. PO Count ({po_count:,})",
+        f"2. DO Count ({do_count:,})",
+        f"3. Unique Parties ({unique_parties:,})",
+        f"4. Total SO Qty ({sum_so_qty:,.2f} MT)",
+        f"5. Total Amount (₹{total_amount:,.0f})",
+        f"6. Dispatched Qty ({sum_disp_qty:,.2f} MT)",
+        f"7. Active Pending ({sum_pending:,.2f} MT)",
+        f"8. Cancelled Qty ({sum_cancelled:,.2f} MT)",
+        f"9. Short Close Qty ({sum_sc:,.2f} MT)",
+        f"10. New Parties Added ({new_customers_count})"
+    ])
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        if st.metric("PO Count", f"{po_count:,}"): st.session_state.active_drilldown = "PO"
-    with c2:
-        if st.metric("DO Count", f"{do_count:,}"): st.session_state.active_drilldown = "DO"
-    with c3:
-        if st.metric("Unique Parties", f"{unique_parties:,}"): st.session_state.active_drilldown = "PARTIES"
-    with c4:
-        if st.metric("Total SO Qty", f"{sum_so_qty:,.2f} MT"): st.session_state.active_drilldown = "SO_QTY"
-    with c5:
-        if st.metric("Total Amount", f"₹{total_amount:,.0f}"): st.session_state.active_drilldown = "AMOUNT"
+    c1.metric("PO Count", f"{po_count:,}")
+    c2.metric("DO Count", f"{do_count:,}")
+    c3.metric("Unique Parties", f"{unique_parties:,}")
+    c4.metric("Total SO Qty", f"{sum_so_qty:,.2f} MT")
+    c5.metric("Total Amount", f"₹{total_amount:,.0f}")
 
     c6, c7, c8, c9, c10 = st.columns(5)
-    with c6:
-        if st.metric("Dispatched Qty", f"{sum_disp_qty:,.2f} MT"): st.session_state.active_drilldown = "DISP"
-    with c7:
-        if st.metric("Active Pending", f"{sum_pending:,.2f} MT"): st.session_state.active_drilldown = "PENDING"
-    with c8:
-        if st.metric("Cancelled Qty", f"{sum_cancelled:,.2f} MT"): st.session_state.active_drilldown = "CANCEL"
-    with c9:
-        if st.metric("Short Close Qty", f"{sum_sc:,.2f} MT"): st.session_state.active_drilldown = "SC"
-    with c10:
-        if st.metric("New Parties", f"{new_customers_count}"): st.session_state.active_drilldown = "NEW_PARTIES"
+    c6.metric("Dispatched Qty", f"{sum_disp_qty:,.2f} MT")
+    c7.metric("Active Pending", f"{sum_pending:,.2f} MT")
+    c8.metric("Cancelled Qty", f"{sum_cancelled:,.2f} MT")
+    c9.metric("Short Close Qty", f"{sum_sc:,.2f} MT")
+    c10.metric("New Parties", f"{new_customers_count}")
 
-    if st.session_state.active_drilldown:
-        st.markdown(f"### 🔍 Detailed View: {st.session_state.active_drilldown}")
-        drill_df = df[df['ORDER_STATUS'] == 'PENDING'] if st.session_state.active_drilldown == "PENDING" else (df[df['ORDER_STATUS'] == 'CANCEL'] if st.session_state.active_drilldown == "CANCEL" else (df[df['ORDER_STATUS'] == 'SC'] if st.session_state.active_drilldown == "SC" else (new_customers_df if st.session_state.active_drilldown == "NEW_PARTIES" else df)))
+    if kpi_choice and kpi_choice != "Select to view details...":
+        st.markdown(f"### 🔍 Detailed View: {kpi_choice}")
+        if "Pending" in kpi_choice:
+            drill_df = df[df['ORDER_STATUS'] == 'PENDING']
+        elif "Cancelled" in kpi_choice:
+            drill_df = df[df['ORDER_STATUS'] == 'CANCEL']
+        elif "Short Close" in kpi_choice:
+            drill_df = df[df['ORDER_STATUS'] == 'SC']
+        elif "New Parties" in kpi_choice:
+            drill_df = new_customers_df
+        else:
+            drill_df = df
         display_cols = [c for c in ['PO_NO', 'DO_NO', 'SO_DATE_STR', 'CUSTOMER_NAME', 'SALES_EXECUTIVE', 'ITEM', 'SO_QTY_(MT)', 'DISP.QTY', 'PENDING', 'ORDER_STATUS', 'REMARK'] if c in drill_df.columns]
         st.dataframe(drill_df[display_cols], use_container_width=True)
-        if st.button("Close Drill-down"):
-            st.session_state.active_drilldown = None
-            st.rerun()
 
     st.markdown("---")
 
