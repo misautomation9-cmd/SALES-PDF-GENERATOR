@@ -72,6 +72,9 @@ def load_and_clean_sheet(file_bytes, sheet_name):
     df = pd.read_excel(file_bytes, sheet_name=sheet_name, header=header_row_idx)
     df.columns = [str(c).strip() for c in df.columns]
     
+    # Remove duplicate columns safely to prevent DataFrame indexing errors
+    df = df.loc[:, ~df.columns.duplicated()].copy()
+    
     renamed_cols = {}
     for col in df.columns:
         col_lower = str(col).strip().lower()
@@ -112,7 +115,7 @@ def load_and_clean_sheet(file_bytes, sheet_name):
     
     str_cols = ['CUSTOMER_NAME', 'SALES_EXECUTIVE', 'ITEM', 'STATUS', 'REMARK', 'BROKER', 'PLACE', 'PO_NO', 'DO_NO', 'THIKNESS']
     for c in str_cols:
-        if c in df.columns:
+        if c in df.columns and isinstance(df[c], pd.Series):
             df[c] = df[c].fillna('N/A').astype(str).str.strip()
 
     df['THICKNESS_MM'] = df['THIKNESS'].astype(str).str.replace(r'(?i)\s*mm', '', regex=True).str.strip()
@@ -447,7 +450,6 @@ elif section == "2) Date, Month & Year Comparison":
     
     comp_mode = st.radio("Select Comparison Type", ["Date Wise", "Month Wise", "Year Wise"], horizontal=True)
     
-    # Combine all sheets to build comprehensive timeline data
     all_dfs = []
     for s_name in sheet_names:
         if 'pending' not in s_name.lower():
@@ -457,7 +459,6 @@ elif section == "2) Date, Month & Year Comparison":
             
     master_df = pd.concat(all_dfs, ignore_index=True)
     master_df['YEAR'] = master_df['SO_DATE'].dt.year.fillna(0).astype(int)
-    master_df['MONTH_YEAR'] = master_df['SO_DATE'].dt.strftime('%B %Y')
     master_df['DATE_STR'] = master_df['SO_DATE'].dt.strftime('%d/%m/%Y')
     
     if comp_mode == "Date Wise":
@@ -474,7 +475,7 @@ elif section == "2) Date, Month & Year Comparison":
         label1, label2 = d1, d2
         
     elif comp_mode == "Month Wise":
-        valid_months = sheet_names # Each sheet is typically a month
+        valid_months = [s for s in sheet_names if 'pending' not in s.lower()]
         c1, c2 = st.columns(2)
         with c1: m1 = st.selectbox("Select Period 1 (Month/Sheet)", valid_months, index=0)
         with c2: m2 = st.selectbox("Select Period 2 (Month/Sheet)", valid_months, index=min(1, len(valid_months)-1))
@@ -527,7 +528,6 @@ elif section == "2) Date, Month & Year Comparison":
     comp_df = pd.DataFrame(comp_table_data)
     st.dataframe(comp_df, use_container_width=True)
     
-    # Comparison Bar Chart
     fig_comp = go.Figure(data=[
         go.Bar(name=str(label1), x=list(kpi1.keys()), y=list(kpi1.values()), text=[f"{v:,.1f}" for v in kpi1.values()], textposition='outside'),
         go.Bar(name=str(label2), x=list(kpi2.keys()), y=list(kpi2.values()), text=[f"{v:,.1f}" for v in kpi2.values()], textposition='outside')
