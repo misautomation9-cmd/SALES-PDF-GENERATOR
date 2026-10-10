@@ -18,31 +18,37 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        font-size: 2rem; font-weight: 700; color: #1f4e79;
-        text-align: center; padding: 10px;
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1f4e79;
+        text-align: center;
+        padding: 10px;
         background: linear-gradient(90deg, #e8f0fe, #ffffff);
-        border-radius: 10px; margin-bottom: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
     }
     .kpi-card {
-        color: white; padding: 15px; border-radius: 12px;
-        text-align: center; box-shadow: 2px 4px 10px rgba(0,0,0,0.15);
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 15px;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 2px 4px 10px rgba(0,0,0,0.15);
         margin-bottom: 8px;
     }
-    .kpi-card h4 { font-size: 0.80rem; margin: 0; opacity: 0.92; font-weight: 600; }
-    .kpi-card h2 { font-size: 1.20rem; margin: 6px 0 0 0; word-break: break-word; }
-    .kpi-card-purple { background: linear-gradient(135deg, #667eea, #764ba2); }
-    .kpi-card-blue   { background: linear-gradient(135deg, #2193b0, #6dd5ed); }
-    .kpi-card-green  { background: linear-gradient(135deg, #11998e, #38ef7d); }
+    .kpi-card h4 { font-size: 0.85rem; margin: 0; opacity: 0.9; }
+    .kpi-card h2 { font-size: 1.3rem; margin: 6px 0 0 0; }
     .kpi-card-orange { background: linear-gradient(135deg, #f7971e, #ffd200); }
     .kpi-card-red    { background: linear-gradient(135deg, #eb3349, #f45c43); }
-    .kpi-card-violet { background: linear-gradient(135deg, #8e2de2, #4a00e0); }
+    .kpi-card-green  { background: linear-gradient(135deg, #11998e, #38ef7d); }
+    .kpi-card-blue   { background: linear-gradient(135deg, #2193b0, #6dd5ed); }
+    .kpi-card-purple { background: linear-gradient(135deg, #8e2de2, #4a00e0); }
     .kpi-card-pink   { background: linear-gradient(135deg, #ec008c, #fc6767); }
-    .kpi-card-teal   { background: linear-gradient(135deg, #1f8a70, #3ed6b3); }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ---------------- HELPERS ----------------
+# ---------------- HELPER FUNCTIONS ----------------
 @st.cache_data(show_spinner=False)
 def load_all_sheets(file_bytes: bytes) -> dict:
     """Read every sheet of the Excel file into a dict of DataFrames."""
@@ -54,8 +60,7 @@ def load_all_sheets(file_bytes: bytes) -> dict:
             for r in range(5):
                 df_scan = pd.read_excel(xls, sheet_name=name, header=r)
                 cols_str = ''.join([str(c) for c in df_scan.columns]).lower()
-                if any(k in cols_str for k in
-                       ('customer', 'party', 'po', 'item', 's_no', 'qty')):
+                if 'customer' in cols_str or 'party' in cols_str or 'po' in cols_str or 'item' in cols_str or 's_no' in cols_str:
                     df_test = df_scan
                     break
             if df_test is None:
@@ -67,38 +72,29 @@ def load_all_sheets(file_bytes: bytes) -> dict:
 
 
 def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Standardise column names + add derived columns. Safe against weird Excel values."""
+    """Clean column names, standardise key fields, safely handle out-of-bounds dates, and prevent PyArrow crashes."""
     df = df.copy()
     df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
 
     mapping = {
         "S_NO": "S_NO", "S NO": "S_NO", "SNO": "S_NO",
         "PO_NO": "PO_NO", "PO NO": "PO_NO",
-        "DO_NO": "DO_NO", "DO NO": "DO_NO",
-        "INVOICE_NO": "INVOICE_NO", "INVOICE NO": "INVOICE_NO",
-        "SO_DATE": "SO_DATE", "SO DATE": "SO_DATE",
-        "PO DATE": "SO_DATE", "PO_DATE": "SO_DATE",
-        "CUSTOMER_NAME": "CUSTOMER_NAME", "CUSTOMER NAME": "CUSTOMER_NAME",
-        "PARTY NAME": "CUSTOMER_NAME", "PARTY_NAME": "CUSTOMER_NAME",
-        "CUSTMER_NAME": "CUSTOMER_NAME",
-        "BROKER": "BROKER", "SECTOR": "SECTOR", "PLACE": "PLACE",
-        "SALES_EXECUTIVE": "SALES_EXECUTIVE", "SALES EXECUTIVE": "SALES_EXECUTIVE",
-        "SELLER NAME": "SALES_EXECUTIVE", "SELLER_NAME": "SALES_EXECUTIVE",
+        "DO_NO": "DO_NO", "DO NO": "DO_NO", "INVOICE_NO": "INVOICE_NO", "INVOICE NO": "INVOICE_NO",
+        "SO_DATE": "SO_DATE", "SO DATE": "SO_DATE", "PO DATE": "SO_DATE", "PO_DATE": "SO_DATE",
+        "CUSTOMER_NAME": "CUSTOMER_NAME", "CUSTOMER NAME": "CUSTOMER_NAME", "PARTY NAME": "CUSTOMER_NAME", "PARTY_NAME": "CUSTOMER_NAME", "CUSTMER_NAME": "CUSTOMER_NAME",
+        "BROKER": "BROKER",
+        "SECTOR": "SECTOR",
+        "PLACE": "PLACE",
+        "SALES_EXECUTIVE": "SALES_EXECUTIVE", "SALES EXECUTIVE": "SALES_EXECUTIVE", "SELLER NAME": "SALES_EXECUTIVE", "SELLER_NAME": "SALES_EXECUTIVE",
         "ITEM": "ITEM", "ITEM_NAME": "ITEM", "ITEM NAME": "ITEM",
         "THIKNESS": "THIKNESS", "THICKNESS": "THIKNESS", "THK": "THIKNESS",
-        "SIZE_(MM)": "SIZE_(MM)", "SIZE (MM)": "SIZE_(MM)",
-        "SIZE_MM": "SIZE_(MM)", "SIZE": "SIZE_(MM)",
+        "SIZE_(MM)": "SIZE_(MM)", "SIZE (MM)": "SIZE_(MM)", "SIZE_MM": "SIZE_(MM)", "SIZE": "SIZE_(MM)",
         "GRADE": "GRADE",
-        "SO_QTY_(MT)": "SO_QTY_(MT)", "SO QTY (MT)": "SO_QTY_(MT)",
-        "PO QTY (MT)": "SO_QTY_(MT)", "PO_QTY_(MT)": "SO_QTY_(MT)",
-        "QTY": "SO_QTY_(MT)", "ORDER QTY": "SO_QTY_(MT)",
-        "PER_TON": "PER_TON", "PER TON": "PER_TON",
-        "RATE": "PER_TON", "PRICE": "PER_TON",
+        "SO_QTY_(MT)": "SO_QTY_(MT)", "SO QTY (MT)": "SO_QTY_(MT)", "PO QTY (MT)": "SO_QTY_(MT)", "PO_QTY_(MT)": "SO_QTY_(MT)", "QTY": "SO_QTY_(MT)", "ORDER QTY": "SO_QTY_(MT)",
+        "PER_TON": "PER_TON", "PER TON": "PER_TON", "RATE": "PER_TON", "PRICE": "PER_TON",
         "INVOICE_DATE": "INVOICE_DATE", "INVOICE DATE": "INVOICE_DATE",
-        "DISPATCH_QTY": "DISPATCH_QTY", "DISPATCH QTY": "DISPATCH_QTY",
-        "DISP.QTY": "DISPATCH_QTY", "DISPATCHED": "DISPATCH_QTY",
-        "PENDING": "PENDING", "PENDING_QTY": "PENDING",
-        "BALANCE": "PENDING", "BAL QTY": "PENDING",
+        "DISPATCH_QTY": "DISPATCH_QTY", "DISPATCH QTY": "DISPATCH_QTY", "DISP.QTY": "DISPATCH_QTY", "DISPATCHED": "DISPATCH_QTY",
+        "PENDING": "PENDING", "PENDING_QTY": "PENDING", "BALANCE": "PENDING", "BAL QTY": "PENDING",
         "PAYMENT": "PAYMENT",
         "DISPATCH_THROUGH": "DISPATCH_THROUGH", "DISPATCH THROUGH": "DISPATCH_THROUGH",
         "STATUS": "STATUS", "ORDER STATUS": "STATUS",
@@ -106,37 +102,39 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
     }
     df.rename(columns={c: mapping.get(c.upper(), c) for c in df.columns}, inplace=True)
 
-    # Numeric
+    # Numeric conversions
     for col in ["SO_QTY_(MT)", "PER_TON", "DISPATCH_QTY", "PENDING"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
         else:
             df[col] = 0.0
 
-    # Safe date parsing
-    def parse_date_safely(val):
-        if pd.isna(val) or str(val).upper() in ("NAN", "NAT", "NONE", "", "0", "0.0"):
-            return pd.NaT
-        try:
-            dt = pd.to_datetime(val, errors="coerce", dayfirst=True)
-            if pd.notna(dt) and 2000 <= dt.year <= 2100:
-                return dt
-        except Exception:
-            pass
-        return pd.NaT
-
+    # Robust safe date parsing wrapper to completely prevent OutOfBoundsDatetime crashes
     for dcol in ["SO_DATE", "INVOICE_DATE"]:
         if dcol in df.columns:
+            def parse_date_safely(val):
+                if pd.isna(val) or str(val).upper() in ("NAN", "NAT", "NONE", "", "0", "0.0"):
+                    return pd.NaT
+                try:
+                    dt = pd.to_datetime(val, errors="coerce", dayfirst=True)
+                    if pd.notna(dt):
+                        if 2000 <= dt.year <= 2100:
+                            return dt
+                except Exception:
+                    pass
+                return pd.NaT
             df[dcol] = df[dcol].apply(parse_date_safely)
         else:
             df[dcol] = pd.NaT
 
+    # Total amount
     df["TOTAL_AMOUNT"] = df["SO_QTY_(MT)"] * df["PER_TON"]
 
-    # String columns
-    str_cols = ["STATUS", "REMARK", "CUSTOMER_NAME", "SALES_EXECUTIVE",
-                "ITEM", "GRADE", "SECTOR", "PLACE", "BROKER",
-                "DISPATCH_THROUGH", "THIKNESS", "PO_NO", "S_NO", "SIZE_(MM)"]
+    # Explicit string casting for all text/ID/specification columns to avoid PyArrow serialization errors
+    str_cols = [
+        "STATUS", "REMARK", "CUSTOMER_NAME", "SALES_EXECUTIVE", "ITEM",
+        "GRADE", "SECTOR", "PLACE", "BROKER", "DISPATCH_THROUGH", "THIKNESS", "PO_NO", "S_NO", "SIZE_(MM)"
+    ]
     for col in str_cols:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().str.upper()
@@ -144,16 +142,15 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df[col] = ""
 
-    # Width from SIZE_(MM)
+    # Extract width safely from SIZE_(MM)
     if "SIZE_(MM)" in df.columns:
         df["WIDTH"] = df["SIZE_(MM)"].str.extract(r"(\d+)\s*X", expand=False)
         df["WIDTH"] = pd.to_numeric(df["WIDTH"], errors="coerce").fillna(0)
     else:
         df["WIDTH"] = 0.0
 
-    # Flags
-    df["IS_CANCEL"] = (df["STATUS"].str.contains("CANCEL", na=False) |
-                       df["REMARK"].str.contains("CANCEL", na=False))
+    # Status Flags
+    df["IS_CANCEL"] = df["STATUS"].str.contains("CANCEL", na=False) | df["REMARK"].str.contains("CANCEL", na=False)
     df["IS_SC"] = (
         df["STATUS"].str.contains(r"\bSC\b", na=False, regex=True) |
         df["REMARK"].str.contains(r"\bSC\b", na=False, regex=True) |
@@ -161,18 +158,13 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
         df["REMARK"].str.contains("SHORT", na=False)
     )
     df["IS_NEW"] = df["REMARK"].str.contains("NEW", na=False)
-    df["IS_PENDING"] = (df["STATUS"].str.contains("PENDING", na=False) |
-                        ((df["PENDING"] > 0) & ~df["IS_CANCEL"] & ~df["IS_SC"]))
-
-    # Date helpers
-    df["YEAR"] = df["SO_DATE"].dt.year
-    df["MONTH"] = df["SO_DATE"].dt.month
-    df["MONTH_NAME"] = df["SO_DATE"].dt.strftime("%B")
+    df["IS_PENDING"] = df["STATUS"].str.contains("PENDING", na=False) | ((df["PENDING"] > 0) & ~df["IS_CANCEL"] & ~df["IS_SC"])
 
     return df
 
 
 def kpi_metrics(df: pd.DataFrame) -> dict:
+    """Return standard KPI dictionary for a dataframe."""
     return {
         "Unique Customers": df["CUSTOMER_NAME"].nunique(),
         "SO Qty (MT)": round(df["SO_QTY_(MT)"].sum(), 2),
@@ -180,15 +172,16 @@ def kpi_metrics(df: pd.DataFrame) -> dict:
         "Dispatch Qty": round(df["DISPATCH_QTY"].sum(), 2),
         "Cancel Qty": round(df.loc[df["IS_CANCEL"], "SO_QTY_(MT)"].sum(), 2),
         "Active Pending": round(df.loc[df["IS_PENDING"], "PENDING"].sum(), 2),
-        "SC Qty": round(df.loc[df["IS_SC"], "PENDING"].sum(), 2),
+        "SC Qty": round(df.loc[df["IS_SC"], "PENDING"].sum(), 2) if "PENDING" in df.columns else 0.0,
         "New Parties": df.loc[df["IS_NEW"], "CUSTOMER_NAME"].nunique(),
     }
 
 
 def render_kpi_row(metrics: dict, key_prefix: str = ""):
+    """Render 8 KPI cards with a 'View Details' button each. Returns selected KPI label."""
     cols = st.columns(8)
-    colors = ["kpi-card-purple", "kpi-card-blue", "kpi-card-green", "kpi-card-orange",
-              "kpi-card-red", "kpi-card-violet", "kpi-card-pink", "kpi-card-teal"]
+    colors = ["kpi-card", "kpi-card-blue", "kpi-card-green", "kpi-card-orange",
+              "kpi-card-red", "kpi-card-purple", "kpi-card-pink", "kpi-card-blue"]
     selected = None
     for i, (label, val) in enumerate(metrics.items()):
         with cols[i]:
@@ -199,13 +192,13 @@ def render_kpi_row(metrics: dict, key_prefix: str = ""):
                     </div>""",
                 unsafe_allow_html=True
             )
-            if st.button("View Details", key=f"{key_prefix}_{label}",
-                         use_container_width=True):
+            if st.button("View Details", key=f"{key_prefix}_{label}", width="stretch"):
                 selected = label
     return selected
 
 
 def drilldown_filter(df: pd.DataFrame, kpi: str) -> pd.DataFrame:
+    """Return dataframe filtered for a selected KPI drill-down."""
     if kpi == "Unique Customers":
         return df.drop_duplicates(subset=["CUSTOMER_NAME"])
     if kpi == "SO Qty (MT)":
@@ -228,8 +221,7 @@ def drilldown_filter(df: pd.DataFrame, kpi: str) -> pd.DataFrame:
 # ---------------- SIDEBAR ----------------
 st.sidebar.markdown("## 📊 Ironmart Dashboard")
 st.sidebar.markdown("### 📁 Upload Excel File")
-uploaded = st.sidebar.file_uploader("Upload Sales Excel (.xlsx / .xls)",
-                                    type=["xlsx", "xls"])
+uploaded = st.sidebar.file_uploader("Upload Sales Excel (.xlsx / .xls)", type=["xlsx", "xls"])
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📌 Sections")
@@ -242,6 +234,7 @@ section = st.sidebar.radio(
 st.markdown('<div class="main-header">Ironmart Sales Analytical Dashboard</div>',
             unsafe_allow_html=True)
 
+# ---------------- NO FILE ----------------
 if uploaded is None:
     st.info("⬅️ Please upload your Sales Excel file from the left sidebar to begin.")
     st.stop()
@@ -251,6 +244,7 @@ try:
     file_bytes = uploaded.getvalue()
     all_sheets = load_all_sheets(file_bytes)
     sheet_names = list(all_sheets.keys())
+    st.sidebar.success(f"Sheets loaded: {len(sheet_names)} found")
 except Exception as e:
     st.error(f"Error reading Excel file: {e}")
     st.stop()
@@ -262,70 +256,32 @@ def read_sheet(name):
     return normalise_columns(all_sheets[name].copy())
 
 
-# Identify Dispatch-Pending sheet (used by Section 3 and excluded from sales list)
-DISPATCH_SHEET = next(
-    (s for s in sheet_names
-     if "dispatch" in s.lower() and "pending" in s.lower()),
-    next((s for s in sheet_names
-          if "dispatch" in s.lower() or "pending" in s.lower()), None)
-)
-
-SALES_SHEETS = [s for s in sheet_names if s != DISPATCH_SHEET]
-
-
 # ================= SECTION 1: SALES ANALYSIS =================
 if section == "Sales Analysis":
     st.subheader("📈 Sales Analysis")
 
-    if not SALES_SHEETS:
-        st.warning("No sales sheets found in the uploaded file.")
-        st.stop()
+    sales_sheets = [s for s in sheet_names if "pending" not in s.lower() or "dispatch" not in s.lower()]
+    if not sales_sheets:
+        sales_sheets = sheet_names
 
-    # --- Sheet + Month/Year filters ---
-    c1, c2, c3 = st.columns([2, 1, 1])
-    selected_sheet = c1.selectbox("📄 Select Sheet / Month", SALES_SHEETS)
-
-    df_main_raw = read_sheet(selected_sheet)
-    if df_main_raw.empty:
-        st.warning(f"Sheet '{selected_sheet}' has no usable data.")
-        st.stop()
-
-    years_available = sorted([int(y) for y in df_main_raw["YEAR"].dropna().unique()])
-    month_order = ["January", "February", "March", "April", "May", "June",
-                   "July", "August", "September", "October", "November", "December"]
-    months_present = [m for m in month_order
-                      if m in df_main_raw["MONTH_NAME"].dropna().unique()]
-
-    sel_year = c2.multiselect("Year", years_available,
-                              default=years_available, key="sa_year")
-    sel_month = c3.multiselect("Month", months_present,
-                               default=months_present, key="sa_month")
-
-    df_main = df_main_raw.copy()
-    if sel_year:
-        df_main = df_main[df_main["YEAR"].isin(sel_year)]
-    if sel_month:
-        df_main = df_main[df_main["MONTH_NAME"].isin(sel_month)]
+    selected_sheet = st.selectbox("Select Month for Analysis", sales_sheets)
+    df_main = read_sheet(selected_sheet)
 
     if df_main.empty:
-        st.warning("No rows match the selected Year/Month filters.")
+        st.warning("Selected sheet has no valid data.")
         st.stop()
 
-    st.caption(f"Showing **{len(df_main):,}** rows from **{selected_sheet}**")
-    st.markdown("---")
-
-    # --- KPI Row ---
     metrics = kpi_metrics(df_main)
     selected_kpi = render_kpi_row(metrics, key_prefix="sa")
 
     if selected_kpi:
         st.markdown(f"### 🔍 Drill-down Report: **{selected_kpi}**")
         drill_df = drilldown_filter(df_main, selected_kpi)
-        st.dataframe(drill_df, use_container_width=True, height=300)
+        st.dataframe(drill_df, width="stretch", height=300)
         st.caption(f"Total Rows: {len(drill_df)}")
         st.markdown("---")
 
-    # --- Donut Chart ---
+    # Donut chart
     st.markdown("#### 🍩 Order Status Breakdown (Ordered, Pending, Cancel, SC, Dispatch)")
     donut_data = {
         "Ordered": df_main["SO_QTY_(MT)"].sum(),
@@ -334,23 +290,23 @@ if section == "Sales Analysis":
         "SC": df_main.loc[df_main["IS_SC"], "PENDING"].sum(),
         "Dispatch": df_main["DISPATCH_QTY"].sum(),
     }
-    fig = px.pie(names=list(donut_data.keys()),
-                 values=list(donut_data.values()),
-                 hole=0.55,
-                 color_discrete_sequence=px.colors.qualitative.Set2)
+    fig = px.pie(
+        names=list(donut_data.keys()),
+        values=list(donut_data.values()),
+        hole=0.55,
+        color_discrete_sequence=px.colors.qualitative.Set2
+    )
     fig.update_traces(textinfo="percent+label")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
-    # --- Filters ---
+    # Filters
     st.markdown("---")
     st.markdown("#### 🔎 Multi-Select Filters")
     f1, f2, f3, f4, f5, f6, f7 = st.columns(7)
 
     def _sel(col, colname):
-        opts = sorted([str(x) for x in df_main[colname].dropna().unique()
-                       if str(x).strip() != ""])
-        return col.multiselect(colname.replace("_", " ").title(), opts,
-                               key=f"sa_{colname}")
+        opts = sorted([str(x) for x in df_main[colname].dropna().unique() if str(x).strip() != ""])
+        return col.multiselect(colname.replace("_", " ").title(), opts, key=f"sa_{colname}")
 
     cust_sel = _sel(f1, "CUSTOMER_NAME")
     se_sel = _sel(f2, "SALES_EXECUTIVE")
@@ -365,89 +321,80 @@ if section == "Sales Analysis":
     if se_sel:     df_filtered = df_filtered[df_filtered["SALES_EXECUTIVE"].isin(se_sel)]
     if item_sel:   df_filtered = df_filtered[df_filtered["ITEM"].isin(item_sel)]
     if thick_sel:  df_filtered = df_filtered[df_filtered["THIKNESS"].isin(thick_sel)]
-    if width_sel:  df_filtered = df_filtered[df_filtered["WIDTH"].astype(str).isin(width_sel)]
+    if width_sel:  df_filtered = df_filtered[df_filtered["WIDTH"].isin([float(w) for w in width_sel])]
     if grade_sel:  df_filtered = df_filtered[df_filtered["GRADE"].isin(grade_sel)]
     if status_sel: df_filtered = df_filtered[df_filtered["STATUS"].isin(status_sel)]
 
-    if df_filtered.empty:
-        st.warning("No rows match the selected filters.")
-        st.stop()
-
-    # --- Salesperson Bar Charts ---
+    # Salesperson Charts
     colA, colB = st.columns(2)
     with colA:
         st.markdown("#### 📊 Sales Person Wise Ordered Qty")
         se_ordered = (df_filtered.groupby("SALES_EXECUTIVE")["SO_QTY_(MT)"]
-                      .sum().reset_index()
-                      .sort_values("SO_QTY_(MT)", ascending=False))
-        if not se_ordered.empty:
-            fig = px.bar(se_ordered, x="SALES_EXECUTIVE", y="SO_QTY_(MT)",
-                         text="SO_QTY_(MT)", color="SALES_EXECUTIVE")
-            fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-            st.plotly_chart(fig, use_container_width=True)
+                      .sum().reset_index().sort_values("SO_QTY_(MT)", ascending=False))
+        fig = px.bar(se_ordered, x="SALES_EXECUTIVE", y="SO_QTY_(MT)",
+                     text="SO_QTY_(MT)", color="SALES_EXECUTIVE")
+        fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+        st.plotly_chart(fig, width="stretch")
 
     with colB:
-        st.markdown("#### 📊 Sales Person Wise Dispatched Qty")
+        st.markdown("#### 📊 Sales Person Wise Dispatched Qty (Horizontal)")
         se_disp = (df_filtered.groupby("SALES_EXECUTIVE")["DISPATCH_QTY"]
-                   .sum().reset_index()
-                   .sort_values("DISPATCH_QTY", ascending=True))
-        if not se_disp.empty:
-            fig = px.bar(se_disp, x="DISPATCH_QTY", y="SALES_EXECUTIVE",
-                         orientation="h", text="DISPATCH_QTY",
-                         color="SALES_EXECUTIVE")
-            fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-            st.plotly_chart(fig, use_container_width=True)
+                   .sum().reset_index().sort_values("DISPATCH_QTY", ascending=True))
+        fig = px.bar(se_disp, x="DISPATCH_QTY", y="SALES_EXECUTIVE",
+                     orientation="h", text="DISPATCH_QTY", color="SALES_EXECUTIVE")
+        fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+        st.plotly_chart(fig, width="stretch")
 
-    # --- Summary Table ---
+    # Executive Summary Table
     st.markdown("#### 📋 Sales Executive & Item-wise Summary Table")
-    grouped = df_filtered.groupby(["SALES_EXECUTIVE", "ITEM"])
-    summary = grouped.agg(
-        OrderedQty=("SO_QTY_(MT)", "sum"),
-        DispatchedQty=("DISPATCH_QTY", "sum"),
-        PendingQty=("PENDING", "sum"),
-    ).reset_index()
+    if not df_filtered.empty:
+        grouped = df_filtered.groupby(["SALES_EXECUTIVE", "ITEM"])
+        summary = grouped.agg(
+            OrderedQty=("SO_QTY_(MT)", "sum"),
+            DispatchedQty=("DISPATCH_QTY", "sum"),
+            PendingQty=("PENDING", "sum"),
+        ).reset_index()
 
-    cancel_map = (df_filtered[df_filtered["IS_CANCEL"]]
-                  .groupby(["SALES_EXECUTIVE", "ITEM"])["SO_QTY_(MT)"].sum()
-                  .rename("CancelQty"))
-    sc_map = (df_filtered[df_filtered["IS_SC"]]
-              .groupby(["SALES_EXECUTIVE", "ITEM"])["PENDING"].sum()
-              .rename("SCQty"))
+        cancel_map = (df_filtered[df_filtered["IS_CANCEL"]]
+                      .groupby(["SALES_EXECUTIVE", "ITEM"])["SO_QTY_(MT)"].sum()
+                      .rename("CancelQty"))
+        sc_map = (df_filtered[df_filtered["IS_SC"]]
+                  .groupby(["SALES_EXECUTIVE", "ITEM"])["PENDING"].sum()
+                  .rename("SCQty"))
 
-    summary = summary.merge(cancel_map, on=["SALES_EXECUTIVE", "ITEM"], how="left")
-    summary = summary.merge(sc_map, on=["SALES_EXECUTIVE", "ITEM"], how="left")
-    summary[["CancelQty", "SCQty"]] = summary[["CancelQty", "SCQty"]].fillna(0)
-    st.dataframe(summary, use_container_width=True)
+        summary = summary.merge(cancel_map, on=["SALES_EXECUTIVE", "ITEM"], how="left")
+        summary = summary.merge(sc_map, on=["SALES_EXECUTIVE", "ITEM"], how="left")
+        summary[["CancelQty", "SCQty"]] = summary[["CancelQty", "SCQty"]].fillna(0)
 
-    # --- Top Parties ---
+        st.dataframe(summary, width="stretch")
+
+    # Top Parties Chart
     st.markdown("#### 🏆 Top Parties Performance Breakdown")
-    top_parties = (df_filtered.groupby("CUSTOMER_NAME")
-                   .agg(Ordered=("SO_QTY_(MT)", "sum"),
-                        Pending=("PENDING", "sum"),
-                        Dispatch=("DISPATCH_QTY", "sum"))
-                   .reset_index()
-                   .sort_values("Ordered", ascending=False).head(15))
+    if not df_filtered.empty:
+        top_parties = (df_filtered.groupby("CUSTOMER_NAME")
+                       .agg(Ordered=("SO_QTY_(MT)", "sum"),
+                            Pending=("PENDING", "sum"),
+                            Dispatch=("DISPATCH_QTY", "sum"))
+                       .reset_index()
+                       .sort_values("Ordered", ascending=False).head(15))
 
-    cancel_by_cust = (df_filtered[df_filtered["IS_CANCEL"]]
-                      .groupby("CUSTOMER_NAME")["SO_QTY_(MT)"].sum())
-    sc_by_cust = (df_filtered[df_filtered["IS_SC"]]
-                  .groupby("CUSTOMER_NAME")["PENDING"].sum())
-    top_parties["Cancel"] = top_parties["CUSTOMER_NAME"].map(cancel_by_cust).fillna(0)
-    top_parties["SC"] = top_parties["CUSTOMER_NAME"].map(sc_by_cust).fillna(0)
+        cancel_by_cust = (df_filtered[df_filtered["IS_CANCEL"]]
+                          .groupby("CUSTOMER_NAME")["SO_QTY_(MT)"].sum())
+        sc_by_cust = (df_filtered[df_filtered["IS_SC"]]
+                      .groupby("CUSTOMER_NAME")["PENDING"].sum())
 
-    fig = go.Figure()
-    for col_name in ["Ordered", "Pending", "Cancel", "Dispatch", "SC"]:
-        fig.add_trace(go.Bar(
-            name=col_name,
-            x=top_parties["CUSTOMER_NAME"],
-            y=top_parties[col_name],
-            text=top_parties[col_name],
-            textposition="outside"
-        ))
-    fig.update_layout(barmode="group", xaxis_tickangle=-45)
-    st.plotly_chart(fig, use_container_width=True)
+        top_parties["Cancel"] = top_parties["CUSTOMER_NAME"].map(cancel_by_cust).fillna(0)
+        top_parties["SC"] = top_parties["CUSTOMER_NAME"].map(sc_by_cust).fillna(0)
 
-    # --- Item Wise Analysis ---
+        fig = go.Figure()
+        for col_name in ["Ordered", "Pending", "Cancel", "Dispatch", "SC"]:
+            fig.add_trace(go.Bar(name=col_name, x=top_parties["CUSTOMER_NAME"],
+                                   y=top_parties[col_name], text=top_parties[col_name],
+                                   textposition="outside"))
+        fig.update_layout(barmode="group", xaxis_tickangle=-45)
+        st.plotly_chart(fig, width="stretch")
+
+    # Item Wise Analysis Table & Chart
     st.markdown("#### 🔩 Item Wise Analysis (Multi-Select Filters)")
     ci1, ci2, ci3 = st.columns(3)
     item_opts = sorted([str(x) for x in df_main["ITEM"].unique() if str(x).strip()])
@@ -478,44 +425,29 @@ if section == "Sales Analysis":
                   .groupby(["ITEM", "THIKNESS", "WIDTH"])["PENDING"].sum()
                   .rename("SC"))
 
-        item_summary = item_summary.merge(itm_cancel,
-                                          on=["ITEM", "THIKNESS", "WIDTH"], how="left")
-        item_summary = item_summary.merge(itm_sc,
-                                          on=["ITEM", "THIKNESS", "WIDTH"], how="left")
+        item_summary = item_summary.merge(itm_cancel, on=["ITEM", "THIKNESS", "WIDTH"], how="left")
+        item_summary = item_summary.merge(itm_sc, on=["ITEM", "THIKNESS", "WIDTH"], how="left")
         item_summary[["Cancel", "SC"]] = item_summary[["Cancel", "SC"]].fillna(0)
 
-        item_display = item_summary.rename(columns={
-            "ITEM": "Itemname", "THIKNESS": "Thickness", "WIDTH": "Width"
-        })
-        st.dataframe(item_display, use_container_width=True)
+        item_summary.rename(columns={"ITEM": "Itemname", "THIKNESS": "Thickness", "WIDTH": "Width"}, inplace=True)
+        st.dataframe(item_summary, width="stretch")
 
         fig = px.bar(
-            item_display.melt(id_vars=["Itemname", "Thickness", "Width"],
-                              value_vars=["Ordered", "Dispatch", "Cancel",
-                                          "Pending", "SC"],
+            item_summary.melt(id_vars=["Itemname", "Thickness", "Width"],
+                              value_vars=["Ordered", "Dispatch", "Cancel", "Pending", "SC"],
                               var_name="Metric", value_name="Qty"),
             x="Itemname", y="Qty", color="Metric", barmode="group", text="Qty"
         )
         fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No item data for selected filters.")
+        st.plotly_chart(fig, width="stretch")
 
 
-# ================= SECTION 2: DATE / MONTH / YEAR COMPARISON =================
+# ================= SECTION 2: DATE/MONTH/YEAR COMPARISON =================
 elif section == "Date/Month/Year Comparison":
     st.subheader("📅 Date / Month / Year Comparison")
 
-    dfs = []
-    for s in SALES_SHEETS:
-        d = read_sheet(s)
-        if not d.empty:
-            dfs.append(d)
+    dfs = [read_sheet(s) for s in sheet_names if "pending" not in s.lower() or "dispatch" not in s.lower()]
     df_all = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
-
-    if df_all.empty:
-        st.warning("No sales sheets with data found.")
-        st.stop()
 
     df_valid = df_all.dropna(subset=["SO_DATE"]).copy()
     if df_valid.empty:
@@ -540,11 +472,8 @@ elif section == "Date/Month/Year Comparison":
             a, b = kA[k], kB[k]
             diff = b - a
             pct = (diff / a * 100) if a not in (0, 0.0) else 0
-            arrow = "🔺" if diff > 0 else ("🔻" if diff < 0 else "➖")
-            rows.append([k, a, b, diff, f"{pct:+.2f}% {arrow}"])
-        return (pd.DataFrame(rows, columns=["KPI", labelA, labelB,
-                                            "Difference", "% Change"]),
-                kA, kB)
+            rows.append([k, a, b, diff, f"{pct:+.2f}%"])
+        return pd.DataFrame(rows, columns=["KPI", labelA, labelB, "Difference", "% Change"]), kA, kB
 
     col1, col2 = st.columns(2)
 
@@ -588,48 +517,41 @@ elif section == "Date/Month/Year Comparison":
     for i, k in enumerate(kA):
         cols[i].metric(k, f"{kB[k]:,.2f}", delta=f"{kB[k] - kA[k]:,.2f}")
 
-    st.dataframe(comp_df, use_container_width=True)
+    st.dataframe(comp_df, width="stretch")
 
     kpi_names = list(kA.keys())
     fig = go.Figure()
     fig.add_trace(go.Bar(name=labelA, x=kpi_names, y=[kA[k] for k in kpi_names],
-                         text=[kA[k] for k in kpi_names], textposition="outside"))
+                           text=[kA[k] for k in kpi_names], textposition="outside"))
     fig.add_trace(go.Bar(name=labelB, x=kpi_names, y=[kB[k] for k in kpi_names],
-                         text=[kB[k] for k in kpi_names], textposition="outside"))
-    fig.update_layout(barmode="group", xaxis_tickangle=-30,
-                      title="KPI Side-by-Side Comparison")
-    st.plotly_chart(fig, use_container_width=True)
+                           text=[kB[k] for k in kpi_names], textposition="outside"))
+    fig.update_layout(barmode="group", xaxis_tickangle=-30)
+    st.plotly_chart(fig, width="stretch")
 
     st.markdown("#### 📈 Cumulative Order Qty Trend")
     trend = df_valid.groupby("SO_DATE")["SO_QTY_(MT)"].sum().reset_index()
-    fig = px.line(trend, x="SO_DATE", y="SO_QTY_(MT)",
-                  markers=True, text="SO_QTY_(MT)")
+    fig = px.line(trend, x="SO_DATE", y="SO_QTY_(MT)", markers=True, text="SO_QTY_(MT)")
     fig.update_traces(textposition="top center")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 # ================= SECTION 3: DISPATCH PENDING =================
 elif section == "Dispatch Pending":
     st.subheader("🚚 Dispatch Pending Analysis")
 
-    if DISPATCH_SHEET is None:
-        st.warning("No sheet with 'Dispatch' or 'Pending' in its name was found.")
-        st.stop()
+    dispatch_sheet_name = next((s for s in sheet_names if "dispatch" in s.lower() or "pending" in s.lower()), sheet_names[0])
+    df_dispatch = read_sheet(dispatch_sheet_name)
 
-    df_dispatch = read_sheet(DISPATCH_SHEET)
     if df_dispatch.empty:
-        st.warning(f"Sheet '{DISPATCH_SHEET}' has no usable data.")
+        st.warning("No Dispatch Pending sheet found.")
         st.stop()
-
-    st.caption(f"Source sheet: **{DISPATCH_SHEET}** — {len(df_dispatch):,} rows")
 
     metrics_dp = kpi_metrics(df_dispatch)
     selected_dp_kpi = render_kpi_row(metrics_dp, key_prefix="dp")
 
     if selected_dp_kpi:
         st.markdown(f"### 🔍 Dispatch Pending Drill-down: **{selected_dp_kpi}**")
-        st.dataframe(drilldown_filter(df_dispatch, selected_dp_kpi),
-                     use_container_width=True, height=300)
+        st.dataframe(drilldown_filter(df_dispatch, selected_dp_kpi), width="stretch", height=300)
         st.markdown("---")
 
     colA, colB = st.columns(2)
@@ -641,38 +563,33 @@ elif section == "Dispatch Pending":
             "Cancel": df_dispatch.loc[df_dispatch["IS_CANCEL"], "SO_QTY_(MT)"].sum(),
             "SC": df_dispatch.loc[df_dispatch["IS_SC"], "PENDING"].sum(),
         }
-        fig = px.pie(names=list(donut_data.keys()),
-                     values=list(donut_data.values()),
-                     hole=0.55,
-                     color_discrete_sequence=px.colors.qualitative.Bold)
+        fig = px.pie(names=list(donut_data.keys()), values=list(donut_data.values()),
+                     hole=0.55, color_discrete_sequence=px.colors.qualitative.Bold)
         fig.update_traces(textinfo="percent+label")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     with colB:
         st.markdown("#### 📊 Sales Executive Wise Pending Qty")
-        se_pending = (df_dispatch.groupby("SALES_EXECUTIVE")["PENDING"]
-                      .sum().reset_index()
-                      .sort_values("PENDING", ascending=True))
-        if not se_pending.empty:
-            fig = px.bar(se_pending, x="PENDING", y="SALES_EXECUTIVE",
-                         orientation="h", text="PENDING",
-                         color="SALES_EXECUTIVE")
+        if "SALES_EXECUTIVE" in df_dispatch.columns:
+            se_pending = (df_dispatch.groupby("SALES_EXECUTIVE")["PENDING"]
+                          .sum().reset_index().sort_values("PENDING", ascending=True))
+            fig = px.bar(se_pending, x="PENDING", y="SALES_EXECUTIVE", orientation="h",
+                         text="PENDING", color="SALES_EXECUTIVE")
             fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     st.markdown("#### 🏆 Top Customers with Pending Qty")
-    cust_pending = (df_dispatch.groupby("CUSTOMER_NAME")["PENDING"]
-                    .sum().reset_index()
-                    .sort_values("PENDING", ascending=False).head(15))
-    if not cust_pending.empty:
+    if "CUSTOMER_NAME" in df_dispatch.columns:
+        cust_pending = (df_dispatch.groupby("CUSTOMER_NAME")["PENDING"]
+                        .sum().reset_index().sort_values("PENDING", ascending=False).head(15))
         fig = px.bar(cust_pending, x="CUSTOMER_NAME", y="PENDING",
                      text="PENDING", color="CUSTOMER_NAME")
         fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
         fig.update_layout(xaxis_tickangle=-45, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown("#### 📋 Dispatch Pending Detail Table")
-    st.dataframe(df_dispatch, use_container_width=True, height=400)
+    st.dataframe(df_dispatch, width="stretch", height=400)
 
     csv = df_dispatch.to_csv(index=False).encode("utf-8")
     st.download_button("⬇️ Download Dispatch Pending CSV", csv,
