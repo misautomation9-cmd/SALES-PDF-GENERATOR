@@ -48,10 +48,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ---------------- HELPER FUNCTIONS ----------------
+# ---------------- HELPERS ----------------
 @st.cache_data(show_spinner=False)
 def load_all_sheets(file_bytes: bytes) -> dict:
-    """Read every sheet of the Excel file into a dict of DataFrames (pickle-safe)."""
     xls = pd.ExcelFile(io.BytesIO(file_bytes))
     sheets = {}
     for name in xls.sheet_names:
@@ -63,7 +62,6 @@ def load_all_sheets(file_bytes: bytes) -> dict:
 
 
 def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean column names and standardise key ones."""
     df = df.copy()
     df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
 
@@ -248,12 +246,10 @@ try:
     file_bytes = uploaded.getvalue()
     all_sheets = load_all_sheets(file_bytes)
     sheet_names = list(all_sheets.keys())
-    # NOTE: no "Sheets found" banner anymore
 except Exception as e:
     st.error(f"Error reading Excel file: {e}")
     st.stop()
 
-# Separate dispatch-pending sheet from sales sheets
 dispatch_sheet = next((s for s in sheet_names
                        if "dispatch" in s.lower() and "pending" in s.lower()), None)
 if dispatch_sheet is None:
@@ -268,7 +264,6 @@ def read_sheet(name):
     return normalise_columns(all_sheets[name].copy())
 
 
-# ---- Combine all sales sheets into one main dataframe ----
 @st.cache_data(show_spinner=False)
 def build_combined_sales(all_sheets: dict, sales_sheet_names: tuple) -> pd.DataFrame:
     frames = []
@@ -285,7 +280,6 @@ def build_combined_sales(all_sheets: dict, sales_sheet_names: tuple) -> pd.DataF
 df_main = build_combined_sales(all_sheets, tuple(sales_sheet_names))
 df_dispatch = read_sheet(dispatch_sheet) if dispatch_sheet else pd.DataFrame()
 
-# Ensure month/year helper columns exist
 if not df_main.empty and "SO_DATE" in df_main.columns:
     df_main["YEAR"] = df_main["SO_DATE"].dt.year
     df_main["MONTH"] = df_main["SO_DATE"].dt.month
@@ -301,7 +295,7 @@ if section == "Sales Analysis":
         st.warning("Main sales sheet could not be loaded or has no data.")
         st.stop()
 
-    # ---- MONTH / YEAR FILTER ROW (this is what you asked for) ----
+    # ---- MONTH / YEAR FILTER ----
     st.markdown("#### 🗓️ Period Filter")
     p1, p2 = st.columns(2)
 
@@ -624,17 +618,26 @@ elif section == "Dispatch Pending":
         if "SALES_EXECUTIVE" in df_dispatch and qty_col:
             se_pending = (df_dispatch.groupby("SALES_EXECUTIVE")[qty_col].sum()
                           .reset_index().sort_values(qty_col, ascending=True))
-            fig = px.bar(se_pending, x=qty_col, y="SALES_EXECUTIVE", orientation="h",
-                         text=qty_col, color="SALES_EXECUTIVE")
-            fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-            st.plotly_chart(fig, use_container_width=True)
+            if not se_pending.empty:
+                fig = px.bar(se_pending, x=qty_col, y="SALES_EXECUTIVE", orientation="h",
+                             text=qty_col, color="SALES_EXECUTIVE")
+                fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+                st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("#### 🏆 Top Customers with Pending Qty")
     if "CUSTOMER_NAME" in df_dispatch and qty_col:
         cust_pending = (df_dispatch.groupby("CUSTOMER_NAME")[qty_col].sum()
                         .reset_index().sort_values(qty_col, ascending=False).head(15))
-        fig = px.bar(cust_pending, x="CUSTOMER_NAME", y=qty_col,
-                     text=qty_col, color="CUSTOMER_NAME")
-        fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-        fig.update_layout(xaxis_tickangle=-45, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True
+        if not cust_pending.empty:
+            fig = px.bar(cust_pending, x="CUSTOMER_NAME", y=qty_col,
+                         text=qty_col, color="CUSTOMER_NAME")
+            fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+            fig.update_layout(xaxis_tickangle=-45, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("#### 📋 Dispatch Pending Detail")
+    st.dataframe(df_dispatch, use_container_width=True, height=400)
+
+    csv = df_dispatch.to_csv(index=False).encode("utf-8")
+    st.download_button("⬇️ Download Dispatch Pending CSV", csv,
+                       "dispatch_pending.csv", "text/csv")
