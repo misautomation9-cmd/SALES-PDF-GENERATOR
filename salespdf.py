@@ -62,7 +62,8 @@ def load_data(file):
     sheets_data = {}
     for sheet in xls.sheet_names:
         try:
-            df = pd.read_excel(xls, sheet=sheet)
+            # FIXED: sheet=sheet changed to sheet_name=sheet
+            df = pd.read_excel(xls, sheet_name=sheet)
             if df.empty or len(df.columns) < 2:
                 continue
             df = normalize_columns(df)
@@ -148,7 +149,6 @@ if uploaded_file is not None:
         if section == "1) Dispatch Analysis":
             st.header("📊 Dispatch Analysis & Performance KPIs")
             
-            # Select Month / Sheet
             selected_month = st.selectbox("Select Month / Sheet", sheet_names)
             df = data_dict[selected_month].copy()
             
@@ -174,7 +174,6 @@ if uploaded_file is not None:
 
             st.subheader(f"Key Performance Metrics ({selected_month})")
             
-            # KPI Button / Expandable Grid
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 if st.button(f"📌 PO Count: {po_count:,}", use_container_width=True):
@@ -260,25 +259,16 @@ if uploaded_file is not None:
 
             st.markdown("---")
             
-            # 1. Sales Executive Item Wise BreakDown Table
+            # Sales Executive Item Wise BreakDown Table
             st.subheader("📋 Sales Executive & Item-wise Breakdown")
             if 'SELLER NAME' in df.columns and 'ITEM' in df.columns:
-                exec_item_grp = df.groupby(['SELLER NAME', 'ITEM', 'STATUS']).agg({
-                    'PO QTY (MT)': 'sum',
-                    'DISP.QTY': 'sum'
-                }).reset_index()
-                
-                # Calculate specific status totals per group
                 exec_item_summary = df.groupby(['SELLER NAME', 'ITEM']).agg({
                     'PO QTY (MT)': 'sum',
                     'DISP.QTY': 'sum'
                 }).reset_index()
                 
-                exec_item_summary['CancelledQty'] = df[df['DERIVED_STATUS'] == 'CANCEL'].groupby(['SELLER NAME', 'ITEM'])['PO QTY (MT)'].sum().reset_index(drop=True)
-                exec_item_summary['CancelledQty'] = exec_item_summary['CancelledQty'].fillna(0)
-                
-                exec_item_summary['ShortCloseQty'] = df[df['DERIVED_STATUS'] == 'SC'].groupby(['SELLER NAME', 'ITEM'])['PO QTY (MT)'].sum().reset_index(drop=True)
-                exec_item_summary['ShortCloseQty'] = exec_item_summary['ShortCloseQty'].fillna(0)
+                exec_item_summary['CancelledQty'] = df[df['DERIVED_STATUS'] == 'CANCEL'].groupby(['SELLER NAME', 'ITEM'])['PO QTY (MT)'].sum().reset_index(drop=True).fillna(0)
+                exec_item_summary['ShortCloseQty'] = df[df['DERIVED_STATUS'] == 'SC'].groupby(['SELLER NAME', 'ITEM'])['PO QTY (MT)'].sum().reset_index(drop=True).fillna(0)
                 
                 exec_item_summary.rename(columns={'PO QTY (MT)': 'OrderedQty', 'DISP.QTY': 'DispatchedQty'}, inplace=True)
                 exec_item_summary['Status'] = 'Active'
@@ -286,7 +276,7 @@ if uploaded_file is not None:
 
             st.markdown("---")
             
-            # 2. Cancelled Orders Per Sales Person Bar Graph
+            # Cancelled Orders Per Sales Person Bar Graph
             st.subheader("❌ Cancelled Orders Per Sales Person")
             cancel_sales = cancel_df.groupby('SELLER NAME')['PO QTY (MT)'].sum().reset_index()
             if not cancel_sales.empty:
@@ -298,7 +288,7 @@ if uploaded_file is not None:
 
             st.markdown("---")
             
-            # 3. Pending Order Per Sales Person Pie Chart
+            # Pending Order Per Sales Person Pie Chart
             st.subheader("⏳ Pending Orders Per Sales Person")
             pending_sales = pending_df.groupby('SELLER NAME')['PO QTY (MT)'].sum().reset_index()
             if not pending_sales.empty:
@@ -310,7 +300,7 @@ if uploaded_file is not None:
 
             st.markdown("---")
             
-            # 4. Sum of SO Qty Received Sales Person Wise Bar Graph
+            # Sum of SO Qty Received Sales Person Wise
             st.subheader("📊 Total SO Quantity Received Sales Person Wise")
             so_sales = df.groupby('SELLER NAME')['PO QTY (MT)'].sum().reset_index()
             fig_so_sales = px.bar(so_sales, x='SELLER NAME', y='PO QTY (MT)', text='PO QTY (MT)', title="SO Qty Received by Sales Executive")
@@ -319,7 +309,7 @@ if uploaded_file is not None:
 
             st.markdown("---")
             
-            # 5. Sum of Dispatched Qty Bar Graph
+            # Sum of Dispatched Qty
             st.subheader("🚚 Dispatched Quantity Sales Person Wise")
             disp_sales = df.groupby('SELLER NAME')['DISP.QTY'].sum().reset_index()
             fig_disp_sales = px.bar(disp_sales, x='SELLER NAME', y='DISP.QTY', text='DISP.QTY', title="Dispatched Qty by Sales Executive")
@@ -328,7 +318,7 @@ if uploaded_file is not None:
 
             st.markdown("---")
             
-            # 6. Customer Wise Detailed Table
+            # Customer Wise Detailed Table
             st.subheader("🏢 Customer-wise Detailed Table")
             cust_summary = df.groupby(['PARTY NAME', 'SELLER NAME']).agg({
                 'PO QTY (MT)': 'sum',
@@ -344,7 +334,7 @@ if uploaded_file is not None:
 
             st.markdown("---")
             
-            # 7. Top 15 Customers Graph
+            # Top 15 Customers Graph
             st.subheader("🏆 Top 15 Customers Breakdown")
             top_15 = cust_summary.sort_values(by='Ordered', ascending=False).head(15)
             fig_top15 = px.bar(top_15, x='PARTY NAME', y=['Ordered', 'Dispatched', 'Cancelled', 'Pending', 'Short Close'], barmode='group', title="Top 15 Customers Performance")
@@ -353,7 +343,7 @@ if uploaded_file is not None:
 
             st.markdown("---")
             
-            # 8. Detailed Item, Thickness, Width Table with Multi-Select Filters
+            # Detailed Item, Thickness, Width Table with Multi-Select Filters
             st.subheader("📦 Detailed Item, Thickness & Width Analysis")
             all_items = sorted(df['ITEM'].dropna().unique().tolist()) if 'ITEM' in df.columns else []
             all_thickness = sorted(df['THICKNESS'].dropna().unique().tolist()) if 'THICKNESS' in df.columns else []
@@ -390,8 +380,6 @@ if uploaded_file is not None:
             st.header("📅 Date-Wise, Month-Wise & Year-Wise Comparison")
             
             comp_mode = st.radio("Select Comparison Level", ["Date-Wise", "Month-Wise", "Year-Wise"], horizontal=True)
-            
-            # Combine all sheets for multi-month/year comparison
             combined_df = pd.concat(data_dict.values(), ignore_index=True)
             
             if comp_mode == "Date-Wise" and 'PO DATE' in combined_df.columns:
@@ -457,7 +445,7 @@ if uploaded_file is not None:
                 if 'PO DATE' in combined_df.columns:
                     combined_df['YEAR'] = combined_df['PO DATE'].dt.year.fillna(2026).astype(int)
                     year_summary = combined_df.groupby('YEAR').agg({
-                        'PO QTY (MT)': 'sum',
+                        'PO QTY (MT)':'sum',
                         'DISP.QTY': 'sum',
                         'TOTAL_AMOUNT': 'sum'
                     }).reset_index()
@@ -471,7 +459,6 @@ if uploaded_file is not None:
         elif section == "3) Pending Dispatch":
             st.header("⏳ Pending Dispatch Report & Summary")
             
-            # Look for pending dispatch sheet or filter active pending
             pending_candidates = [s for s in sheet_names if 'pending' in s.lower() and 'dispatch' in s.lower()]
             target_sheet = pending_candidates[0] if pending_candidates else sheet_names[0]
             
