@@ -97,15 +97,22 @@ def load_and_clean_sheet(file_bytes, sheet_name):
 
     numeric_cols = ['SO_QTY_(MT)', 'PER_TON', 'DISP.QTY', 'PENDING']
     for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+        if col in df.columns:
+            if isinstance(df[col], pd.DataFrame):
+                df[col] = df[col].iloc[:, 0]
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
 
     if 'CUSTOMER_NAME' in df.columns:
+        if isinstance(df['CUSTOMER_NAME'], pd.DataFrame):
+            df['CUSTOMER_NAME'] = df['CUSTOMER_NAME'].iloc[:, 0]
         is_total_word = df['CUSTOMER_NAME'].astype(str).str.lower().str.contains('total|sum', na=False)
         is_empty_cust = df['CUSTOMER_NAME'].isna() | (df['CUSTOMER_NAME'].astype(str).str.strip() == '') | (df['CUSTOMER_NAME'].astype(str).str.lower() == 'nan')
         is_empty_do = df['DO_NO'].isna() | (df['DO_NO'].astype(str).str.strip() == '') | (df['DO_NO'].astype(str).str.lower() == 'nan')
         df = df[~(is_total_word | (is_empty_cust & is_empty_do))].copy()
 
     if 'SO_DATE' in df.columns:
+        if isinstance(df['SO_DATE'], pd.DataFrame):
+            df['SO_DATE'] = df['SO_DATE'].iloc[:, 0]
         so_date_clean = df['SO_DATE'].astype(str).str.replace('.', '/', regex=False)
         df['SO_DATE'] = pd.to_datetime(so_date_clean, dayfirst=True, errors='coerce')
     
@@ -114,13 +121,18 @@ def load_and_clean_sheet(file_bytes, sheet_name):
     
     str_cols = ['CUSTOMER_NAME', 'SALES_EXECUTIVE', 'ITEM', 'STATUS', 'REMARK', 'BROKER', 'PLACE', 'PO_NO', 'DO_NO', 'THIKNESS']
     for c in str_cols:
-        if c in df.columns and isinstance(df[c], pd.Series):
+        if c in df.columns:
+            if isinstance(df[c], pd.DataFrame):
+                df[c] = df[c].iloc[:, 0]
             df[c] = df[c].fillna('N/A').astype(str).str.strip()
 
     df['THICKNESS_MM'] = df['THIKNESS'].astype(str).str.replace(r'(?i)\s*mm', '', regex=True).str.strip()
 
-    status_lower = df['STATUS'].str.lower()
-    remark_lower = df['REMARK'].str.lower()
+    status_series = df['STATUS'] if isinstance(df['STATUS'], pd.Series) else df['STATUS'].iloc[:, 0]
+    remark_series = df['REMARK'] if isinstance(df['REMARK'], pd.Series) else df['REMARK'].iloc[:, 0]
+    
+    status_lower = status_series.astype(str).str.lower()
+    remark_lower = remark_series.astype(str).str.lower()
     
     df['IS_CANCELLED'] = status_lower.str.contains('cancel') | remark_lower.str.contains('cancel')
     df['IS_SHORT_CLOSE'] = status_lower.str.contains(r'\bsc\b|short close') | remark_lower.str.contains(r'\bsc\b|short close')
@@ -149,7 +161,7 @@ def load_and_clean_sheet(file_bytes, sheet_name):
         num = re.findall(r'\d+', str(size_val))
         return num[0] if num else str(size_val)
 
-    df['WIDTH_MM'] = df['SIZE_(MM)'].apply(parse_width)
+    df['WIDTH_MM'] = df['SIZE_(MM)'].apply(parse_width) if 'SIZE_(MM)' in df.columns else "N/A"
 
     return df
 
@@ -283,15 +295,18 @@ if section == "1) Dispatch Analysis":
     if 'active_kpi_drill' not in st.session_state:
         st.session_state.active_kpi_drill = None
 
-    # Custom wrapped button style for KPIs
+    # Strict CSS wrapping for KPI buttons
     st.markdown("""
         <style>
-        .stButton>button {
-            width: 100%;
-            white-space: normal !important;
-            height: auto !important;
-            padding: 10px !important;
-            font-size: 13px !important;
+        div.stButton > button {
+            width: 100% !important;
+            white-space: pre-wrap !important;
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+            height: 75px !important;
+            font-size: 12px !important;
+            line-height: 1.3 !important;
+            padding: 5px !important;
             text-align: center !important;
         }
         </style>
@@ -299,27 +314,27 @@ if section == "1) Dispatch Analysis":
 
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        if st.button(f"📌 PO Count\n\n{po_count:,}", key="kpi_po"): st.session_state.active_kpi_drill = "PO"
+        if st.button(f"PO Count\n{po_count:,}", key="kpi_po"): st.session_state.active_kpi_drill = "PO"
     with c2:
-        if st.button(f"📌 DO Count\n\n{do_count:,}", key="kpi_do"): st.session_state.active_kpi_drill = "DO"
+        if st.button(f"DO Count\n{do_count:,}", key="kpi_do"): st.session_state.active_kpi_drill = "DO"
     with c3:
-        if st.button(f"📌 Unique Parties\n\n{unique_parties:,}", key="kpi_parties"): st.session_state.active_kpi_drill = "PARTIES"
+        if st.button(f"Unique Parties\n{unique_parties:,}", key="kpi_parties"): st.session_state.active_kpi_drill = "PARTIES"
     with c4:
-        if st.button(f"📌 Total SO Qty\n\n{sum_so_qty:,.2f} MT", key="kpi_so"): st.session_state.active_kpi_drill = "SO_QTY"
+        if st.button(f"Total SO Qty\n{sum_so_qty:,.1f} MT", key="kpi_so"): st.session_state.active_kpi_drill = "SO_QTY"
     with c5:
-        if st.button(f"📌 Total Amount\n\n₹{total_amount:,.0f}", key="kpi_amt"): st.session_state.active_kpi_drill = "AMOUNT"
+        if st.button(f"Total Amount\n₹{total_amount:,.0f}", key="kpi_amt"): st.session_state.active_kpi_drill = "AMOUNT"
 
     c6, c7, c8, c9, c10 = st.columns(5)
     with c6:
-        if st.button(f"📌 Dispatched Qty\n\n{sum_disp_qty:,.2f} MT", key="kpi_disp"): st.session_state.active_kpi_drill = "DISP"
+        if st.button(f"Dispatched Qty\n{sum_disp_qty:,.1f} MT", key="kpi_disp"): st.session_state.active_kpi_drill = "DISP"
     with c7:
-        if st.button(f"📌 Active Pending\n\n{sum_pending:,.2f} MT", key="kpi_pend"): st.session_state.active_kpi_drill = "PENDING"
+        if st.button(f"Active Pending\n{sum_pending:,.1f} MT", key="kpi_pend"): st.session_state.active_kpi_drill = "PENDING"
     with c8:
-        if st.button(f"📌 Cancelled Qty\n\n{sum_cancelled:,.2f} MT", key="kpi_canc"): st.session_state.active_kpi_drill = "CANCEL"
+        if st.button(f"Cancelled Qty\n{sum_cancelled:,.1f} MT", key="kpi_canc"): st.session_state.active_kpi_drill = "CANCEL"
     with c9:
-        if st.button(f"📌 Short Close\n\n{sum_sc:,.2f} MT", key="kpi_sc"): st.session_state.active_kpi_drill = "SC"
+        if st.button(f"Short Close\n{sum_sc:,.1f} MT", key="kpi_sc"): st.session_state.active_kpi_drill = "SC"
     with c10:
-        if st.button(f"📌 New Parties\n\n{new_customers_count}", key="kpi_new"): st.session_state.active_kpi_drill = "NEW_PARTIES"
+        if st.button(f"New Parties\n{new_customers_count}", key="kpi_new"): st.session_state.active_kpi_drill = "NEW_PARTIES"
 
     if st.session_state.active_kpi_drill:
         st.markdown(f"### 🔍 Detailed View: {st.session_state.active_kpi_drill}")
@@ -407,7 +422,6 @@ elif section == "2) Date, Month & Year Comparison":
     
     comp_mode = st.radio("Select Comparison Level", ["Date Wise", "Month Wise", "Year Wise"], horizontal=True)
     
-    # Load master timeline dataset across all data sheets
     all_dfs = []
     for s_name in sheet_names:
         if 'pending' not in s_name.lower():
