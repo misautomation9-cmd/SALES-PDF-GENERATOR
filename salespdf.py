@@ -23,7 +23,7 @@ st.set_page_config(
 st.title("📊 Ironmart Sales & Dispatch Analytics Dashboard")
 
 # ---------------------------------------------------------
-# Flexible Header Mapping & Normalization (Fixed DISPATCH_QTY)
+# Flexible Header Mapping & Normalization
 # ---------------------------------------------------------
 EXPECTED_COLUMNS = {
     'S_NO': ['s_no', 's.no', 'sr no', 'serial no', 'sno', 's_no.', 'sr no.'],
@@ -129,6 +129,8 @@ def load_and_clean_sheet(file_bytes, sheet_name):
             return 'CANCEL'
         elif row['IS_SHORT_CLOSE']:
             return 'SC'
+        elif row['DISP.QTY'] >= row['SO_QTY_(MT)'] - 0.01:
+            return 'OK'
         elif row['PENDING'] <= 0.01:
             return 'OK'
         else:
@@ -150,7 +152,7 @@ def load_and_clean_sheet(file_bytes, sheet_name):
     return df
 
 # ---------------------------------------------------------
-# Sidebar Controls
+# Sidebar Navigation Controls
 # ---------------------------------------------------------
 with st.sidebar:
     st.subheader("📌 Navigation & Controls")
@@ -162,15 +164,16 @@ with st.sidebar:
         
         st.markdown("---")
         section = st.radio("Select Section", [
-            "1) Dispatch & Executive Analysis",
-            "2) Customer & Item Deep-Dive"
+            "1) Dispatch Analysis",
+            "2) Date, Month & Year Comparison",
+            "3) Pending Dispatch Report"
         ])
     else:
         st.info("👈 Please upload your sales Excel workbook to begin analysis.")
         st.stop()
 
 # ---------------------------------------------------------
-# Matplotlib Chart Helpers for PDF Export
+# Helper Chart & PDF Functions
 # ---------------------------------------------------------
 def make_pie_chart_bytes(labels, values, title):
     fig, ax = plt.subplots(figsize=(6, 3.2), dpi=200)
@@ -212,9 +215,6 @@ def make_bar_chart_bytes(df_data, x_col, y_col, title, color='#2563EB'):
     buf.seek(0)
     return buf
 
-# ---------------------------------------------------------
-# ReportLab PDF Generator
-# ---------------------------------------------------------
 def generate_dashboard_pdf(sheet_name, kpis, chart_buffers, tables_dict):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
@@ -226,7 +226,7 @@ def generate_dashboard_pdf(sheet_name, kpis, chart_buffers, tables_dict):
     cell_style = ParagraphStyle('TableCell', parent=styles['Normal'], fontSize=7, leading=8.5)
     cell_header = ParagraphStyle('HeaderCell', parent=styles['Normal'], fontSize=7.5, leading=9, textColor=colors.whitesmoke, fontName="Helvetica-Bold")
     
-    story.append(Paragraph(f"<b>📊 Dispatch & Executive Report — {sheet_name}</b>", title_style))
+    story.append(Paragraph(f"<b>📊 Dispatch Report — {sheet_name}</b>", title_style))
     story.append(Spacer(1, 4))
     
     if kpis:
@@ -294,15 +294,14 @@ def generate_dashboard_pdf(sheet_name, kpis, chart_buffers, tables_dict):
     return buffer.getvalue()
 
 # ---------------------------------------------------------
-# SECTION 1: DISPATCH & EXECUTIVE ANALYSIS (MERGED)
+# SECTION 1: DISPATCH ANALYSIS (WITH CUSTOMER & ITEM WISE)
 # ---------------------------------------------------------
-if section == "1) Dispatch & Executive Analysis":
-    st.header("📦 Dispatch & Executive Performance Dashboard")
+if section == "1) Dispatch Analysis":
+    st.header("📦 Dispatch Analysis & Monthly Performance")
     
     selected_month = st.selectbox("Select Month / Sheet", sheet_names)
     df = load_and_clean_sheet(uploaded_file, selected_month)
     
-    # KPI Calculations
     po_count = df['PO_NO'].replace(['N/A', 'Unknown', 'nan'], np.nan).dropna().nunique()
     do_count = df['DO_NO'].replace(['N/A', 'Unknown', 'nan'], np.nan).dropna().nunique()
     unique_parties = df['CUSTOMER_NAME'].replace(['N/A', 'Unknown', 'nan'], np.nan).dropna().nunique()
@@ -330,49 +329,41 @@ if section == "1) Dispatch & Executive Analysis":
 
     st.subheader("📌 Key Performance Indicators (Click any metric card below to inspect details)")
     
-    # Readable Clickable Selectors for KPIs
-    kpi_choice = st.selectbox("Select KPI to View Details", [
-        "Select to view details...",
-        f"1. PO Count ({po_count:,})",
-        f"2. DO Count ({do_count:,})",
-        f"3. Unique Parties ({unique_parties:,})",
-        f"4. Total SO Qty ({sum_so_qty:,.2f} MT)",
-        f"5. Total Amount (₹{total_amount:,.0f})",
-        f"6. Dispatched Qty ({sum_disp_qty:,.2f} MT)",
-        f"7. Active Pending ({sum_pending:,.2f} MT)",
-        f"8. Cancelled Qty ({sum_cancelled:,.2f} MT)",
-        f"9. Short Close Qty ({sum_sc:,.2f} MT)",
-        f"10. New Parties Added ({new_customers_count})"
-    ])
+    if 'active_kpi_drill' not in st.session_state:
+        st.session_state.active_kpi_drill = None
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("PO Count", f"{po_count:,}")
-    c2.metric("DO Count", f"{do_count:,}")
-    c3.metric("Unique Parties", f"{unique_parties:,}")
-    c4.metric("Total SO Qty", f"{sum_so_qty:,.2f} MT")
-    c5.metric("Total Amount", f"₹{total_amount:,.0f}")
+    with c1:
+        if st.button(f"📌 PO Count\n\n{po_count:,}", use_container_width=True): st.session_state.active_kpi_drill = "PO"
+    with c2:
+        if st.button(f"📌 DO Count\n\n{do_count:,}", use_container_width=True): st.session_state.active_kpi_drill = "DO"
+    with c3:
+        if st.button(f"📌 Unique Parties\n\n{unique_parties:,}", use_container_width=True): st.session_state.active_kpi_drill = "PARTIES"
+    with c4:
+        if st.button(f"📌 Total SO Qty\n\n{sum_so_qty:,.2f} MT", use_container_width=True): st.session_state.active_kpi_drill = "SO_QTY"
+    with c5:
+        if st.button(f"📌 Total Amount\n\n₹{total_amount:,.0f}", use_container_width=True): st.session_state.active_kpi_drill = "AMOUNT"
 
     c6, c7, c8, c9, c10 = st.columns(5)
-    c6.metric("Dispatched Qty", f"{sum_disp_qty:,.2f} MT")
-    c7.metric("Active Pending", f"{sum_pending:,.2f} MT")
-    c8.metric("Cancelled Qty", f"{sum_cancelled:,.2f} MT")
-    c9.metric("Short Close Qty", f"{sum_sc:,.2f} MT")
-    c10.metric("New Parties", f"{new_customers_count}")
+    with c6:
+        if st.button(f"📌 Dispatched Qty\n\n{sum_disp_qty:,.2f} MT", use_container_width=True): st.session_state.active_kpi_drill = "DISP"
+    with c7:
+        if st.button(f"📌 Active Pending\n\n{sum_pending:,.2f} MT", use_container_width=True): st.session_state.active_kpi_drill = "PENDING"
+    with c8:
+        if st.button(f"📌 Cancelled Qty\n\n{sum_cancelled:,.2f} MT", use_container_width=True): st.session_state.active_kpi_drill = "CANCEL"
+    with c9:
+        if st.button(f"📌 Short Close Qty\n\n{sum_sc:,.2f} MT", use_container_width=True): st.session_state.active_kpi_drill = "SC"
+    with c10:
+        if st.button(f"📌 New Parties\n\n{new_customers_count}", use_container_width=True): st.session_state.active_kpi_drill = "NEW_PARTIES"
 
-    if kpi_choice and kpi_choice != "Select to view details...":
-        st.markdown(f"### 🔍 Detailed View: {kpi_choice}")
-        if "Pending" in kpi_choice:
-            drill_df = df[df['ORDER_STATUS'] == 'PENDING']
-        elif "Cancelled" in kpi_choice:
-            drill_df = df[df['ORDER_STATUS'] == 'CANCEL']
-        elif "Short Close" in kpi_choice:
-            drill_df = df[df['ORDER_STATUS'] == 'SC']
-        elif "New Parties" in kpi_choice:
-            drill_df = new_customers_df
-        else:
-            drill_df = df
+    if st.session_state.active_kpi_drill:
+        st.markdown(f"### 🔍 Detailed View: {st.session_state.active_kpi_drill}")
+        drill_df = df[df['ORDER_STATUS'] == 'PENDING'] if st.session_state.active_kpi_drill == "PENDING" else (df[df['ORDER_STATUS'] == 'CANCEL'] if st.session_state.active_kpi_drill == "CANCEL" else (df[df['ORDER_STATUS'] == 'SC'] if st.session_state.active_kpi_drill == "SC" else (new_customers_df if st.session_state.active_kpi_drill == "NEW_PARTIES" else df)))
         display_cols = [c for c in ['PO_NO', 'DO_NO', 'SO_DATE_STR', 'CUSTOMER_NAME', 'SALES_EXECUTIVE', 'ITEM', 'SO_QTY_(MT)', 'DISP.QTY', 'PENDING', 'ORDER_STATUS', 'REMARK'] if c in drill_df.columns]
         st.dataframe(drill_df[display_cols], use_container_width=True)
+        if st.button("Close Drill-down"):
+            st.session_state.active_kpi_drill = None
+            st.rerun()
 
     st.markdown("---")
 
@@ -398,71 +389,9 @@ if section == "1) Dispatch & Executive Analysis":
     ).reset_index()
     st.dataframe(sp_item_grp, use_container_width=True)
 
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.subheader("📊 Cancelled Orders Per Sales Person")
-        sp_cancelled = df[df['ORDER_STATUS'] == 'CANCEL'].groupby('SALES_EXECUTIVE')['SO_QTY_(MT)'].sum().reset_index()
-        sp_cancelled.columns = ['Sales Executive', 'Cancelled Qty']
-        fig_cancel = px.bar(sp_cancelled, x='Sales Executive', y='Cancelled Qty', text_auto=',.2f', color_discrete_sequence=['#EF4444'])
-        fig_cancel.update_traces(textposition='outside')
-        st.plotly_chart(fig_cancel, use_container_width=True)
-        
-    with col_b:
-        st.subheader("🥧 Pending Order Share Per Sales Person")
-        sp_pending = df[df['ORDER_STATUS'] == 'PENDING'].groupby('SALES_EXECUTIVE')['PENDING'].sum().reset_index()
-        sp_pending.columns = ['Sales Executive', 'Pending Qty']
-        fig_pending = px.pie(sp_pending, names='Sales Executive', values='Pending Qty', hole=0.3)
-        fig_pending.update_traces(textinfo='label+value+percent')
-        st.plotly_chart(fig_pending, use_container_width=True)
-
-    col_c, col_d = st.columns(2)
-    with col_c:
-        st.subheader("📊 SO Qty Received — Sales Person Wise")
-        sp_so = df.groupby('SALES_EXECUTIVE')['SO_QTY_(MT)'].sum().reset_index()
-        sp_so.columns = ['Sales Executive', 'SO Qty (MT)']
-        fig_so = px.bar(sp_so, x='Sales Executive', y='SO Qty (MT)', text_auto=',.2f', color_discrete_sequence=['#3B82F6'])
-        fig_so.update_traces(textposition='outside')
-        st.plotly_chart(fig_so, use_container_width=True)
-        
-    with col_d:
-        st.subheader("📊 Dispatched Qty — Sales Person Wise")
-        sp_disp = df.groupby('SALES_EXECUTIVE')['DISP.QTY'].sum().reset_index()
-        sp_disp.columns = ['Sales Executive', 'Dispatched Qty']
-        fig_disp = px.bar(sp_disp, x='Sales Executive', y='Dispatched Qty', text_auto=',.2f', color_discrete_sequence=['#10B981'])
-        fig_disp.update_traces(textposition='outside')
-        st.plotly_chart(fig_disp, use_container_width=True)
-
+    # Customer & Item Wise Section (Integrated into Dispatch)
     st.markdown("---")
-    st.subheader("📥 Download Dashboard PDF Report")
-    
-    chart_bufs = {
-        "Order Status Distribution": make_pie_chart_bytes(status_counts['Status'], status_counts['Count'], "Order Status Distribution"),
-        "Cancelled Orders by Sales Person": make_bar_chart_bytes(sp_cancelled, 'Sales Executive', 'Cancelled Qty', "Cancelled Orders by Sales Person", '#EF4444'),
-        "SO Qty by Sales Person": make_bar_chart_bytes(sp_so, 'Sales Executive', 'SO Qty (MT)', "SO Qty by Sales Person", '#3B82F6'),
-        "Dispatched Qty by Sales Person": make_bar_chart_bytes(sp_disp, 'Sales Executive', 'Dispatched Qty', "Dispatched Qty by Sales Person", '#10B981')
-    }
-    tables_to_pdf = {
-        "Sales Executive Item-Wise Breakdown": sp_item_grp
-    }
-    
-    pdf_data = generate_dashboard_pdf(selected_month, kpi_dict, chart_bufs, tables_to_pdf)
-    st.download_button(
-        "📥 Download PDF Report",
-        data=pdf_data,
-        file_name=f"Dashboard_Report_{selected_month}.pdf",
-        mime="application/pdf"
-    )
-
-# ---------------------------------------------------------
-# SECTION 2: CUSTOMER & ITEM DEEP-DIVE
-# ---------------------------------------------------------
-elif section == "2) Customer & Item Deep-Dive":
-    st.header("🏢 Customer & Item Detailed Analytics")
-    
-    selected_month = st.selectbox("Select Month / Sheet", sheet_names, key="sec2_sheet")
-    df = load_and_clean_sheet(uploaded_file, selected_month)
-    
-    st.subheader("📋 Customer Wise Detailed Table")
+    st.subheader("🏢 Customer Wise Detailed Table")
     cust_grp = df.groupby(['CUSTOMER_NAME', 'SALES_EXECUTIVE']).agg(
         Ordered=('SO_QTY_(MT)', 'sum'),
         Dispatched=('DISP.QTY', 'sum'),
@@ -481,7 +410,7 @@ elif section == "2) Customer & Item Deep-Dive":
     )
     fig_topcust.update_traces(textposition='outside')
     st.plotly_chart(fig_topcust, use_container_width=True)
-    
+
     st.markdown("---")
     st.subheader("🔍 Detailed Item, Thickness & Width Table with Filters")
     item_spec_grp = df.groupby(['ITEM', 'THICKNESS_MM', 'WIDTH_MM']).agg(
@@ -504,3 +433,150 @@ elif section == "2) Customer & Item Deep-Dive":
     if selected_width: filtered_spec = filtered_spec[filtered_spec['Width'].isin(selected_width)]
 
     st.dataframe(filtered_spec, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("📥 Download Dispatch PDF Report")
+    pdf_data = generate_dashboard_pdf(selected_month, kpi_dict, {}, {"Customer Wise Summary": cust_grp})
+    st.download_button("📥 Download PDF Report", data=pdf_data, file_name=f"Dispatch_Report_{selected_month}.pdf", mime="application/pdf")
+
+# ---------------------------------------------------------
+# SECTION 2: DATE, MONTH & YEAR COMPARISON
+# ---------------------------------------------------------
+elif section == "2) Date, Month & Year Comparison":
+    st.header("⚖️ Date, Month & Year Wise Comparison")
+    
+    comp_mode = st.radio("Select Comparison Type", ["Date Wise", "Month Wise", "Year Wise"], horizontal=True)
+    
+    # Combine all sheets to build comprehensive timeline data
+    all_dfs = []
+    for s_name in sheet_names:
+        if 'pending' not in s_name.lower():
+            temp_df = load_and_clean_sheet(uploaded_file, s_name)
+            temp_df['SHEET_NAME'] = s_name
+            all_dfs.append(temp_df)
+            
+    master_df = pd.concat(all_dfs, ignore_index=True)
+    master_df['YEAR'] = master_df['SO_DATE'].dt.year.fillna(0).astype(int)
+    master_df['MONTH_YEAR'] = master_df['SO_DATE'].dt.strftime('%B %Y')
+    master_df['DATE_STR'] = master_df['SO_DATE'].dt.strftime('%d/%m/%Y')
+    
+    if comp_mode == "Date Wise":
+        valid_dates = sorted(master_df.dropna(subset=['SO_DATE'])['DATE_STR'].unique())
+        if not valid_dates:
+            st.warning("No valid dates found for comparison.")
+            st.stop()
+        c1, c2 = st.columns(2)
+        with c1: d1 = st.selectbox("Select Period 1 (Date)", valid_dates, index=0)
+        with c2: d2 = st.selectbox("Select Period 2 (Date)", valid_dates, index=min(1, len(valid_dates)-1))
+        
+        df1 = master_df[master_df['DATE_STR'] == d1]
+        df2 = master_df[master_df['DATE_STR'] == d2]
+        label1, label2 = d1, d2
+        
+    elif comp_mode == "Month Wise":
+        valid_months = sheet_names # Each sheet is typically a month
+        c1, c2 = st.columns(2)
+        with c1: m1 = st.selectbox("Select Period 1 (Month/Sheet)", valid_months, index=0)
+        with c2: m2 = st.selectbox("Select Period 2 (Month/Sheet)", valid_months, index=min(1, len(valid_months)-1))
+        
+        df1 = load_and_clean_sheet(uploaded_file, m1)
+        df2 = load_and_clean_sheet(uploaded_file, m2)
+        label1, label2 = m1, m2
+        
+    else: # Year Wise
+        valid_years = sorted([y for y in master_df['YEAR'].unique() if y > 2000])
+        if not valid_years:
+            st.warning("No valid years found for comparison.")
+            st.stop()
+        c1, c2 = st.columns(2)
+        with c1: y1 = st.selectbox("Select Period 1 (Year)", valid_years, index=0)
+        with c2: y2 = st.selectbox("Select Period 2 (Year)", valid_years, index=min(1, len(valid_years)-1))
+        
+        df1 = master_df[master_df['YEAR'] == y1]
+        df2 = master_df[master_df['YEAR'] == y2]
+        label1, label2 = str(y1), str(y2)
+
+    def calc_comp_kpis(d):
+        return {
+            'PO Count': d['PO_NO'].replace(['N/A', 'Unknown', 'nan'], np.nan).dropna().nunique(),
+            'SO Qty (MT)': d['SO_QTY_(MT)'].sum(),
+            'Dispatched Qty (MT)': d['DISP.QTY'].sum(),
+            'Total Amount (₹)': d['TOTAL_AMOUNT'].sum(),
+            'Pending Qty (MT)': d[d['ORDER_STATUS'] == 'PENDING']['PENDING'].sum()
+        }
+
+    kpi1 = calc_comp_kpis(df1)
+    kpi2 = calc_comp_kpis(df2)
+    
+    st.subheader(f"📊 Comparison Summary: {label1} vs {label2}")
+    
+    comp_table_data = []
+    for k in kpi1.keys():
+        val1 = kpi1[k]
+        val2 = kpi2[k]
+        diff = val2 - val1
+        pct_var = (diff / val1 * 100) if val1 > 0 else 0.0
+        comp_table_data.append({
+            "Metric": k,
+            f"{label1}": val1,
+            f"{label2}": val2,
+            "Variance (Diff)": diff,
+            "Variance (%)": f"{pct_var:+.2f}%"
+        })
+        
+    comp_df = pd.DataFrame(comp_table_data)
+    st.dataframe(comp_df, use_container_width=True)
+    
+    # Comparison Bar Chart
+    fig_comp = go.Figure(data=[
+        go.Bar(name=str(label1), x=list(kpi1.keys()), y=list(kpi1.values()), text=[f"{v:,.1f}" for v in kpi1.values()], textposition='outside'),
+        go.Bar(name=str(label2), x=list(kpi2.keys()), y=list(kpi2.values()), text=[f"{v:,.1f}" for v in kpi2.values()], textposition='outside')
+    ])
+    fig_comp.update_layout(barmode='group', title=f"Performance Comparison: {label1} vs {label2}")
+    st.plotly_chart(fig_comp, use_container_width=True)
+
+# ---------------------------------------------------------
+# SECTION 3: PENDING DISPATCH REPORT
+# ---------------------------------------------------------
+elif section == "3) Pending Dispatch Report":
+    st.header("🚚 Pending Dispatch Report")
+    
+    pd_sheet_candidates = [s for s in sheet_names if 'pending' in s.lower() and 'dispatch' in s.lower()]
+    target_pd_sheet = pd_sheet_candidates[0] if pd_sheet_candidates else (sheet_names[-1] if sheet_names else None)
+    
+    pd_sheet = st.selectbox("Select Pending Dispatch Sheet", sheet_names, index=sheet_names.index(target_pd_sheet) if target_pd_sheet in sheet_names else 0)
+    
+    df_pd = load_and_clean_sheet(uploaded_file, pd_sheet)
+    active_pd = df_pd[(df_pd['ORDER_STATUS'] == 'PENDING') & (~df_pd['IS_CANCELLED'])].copy()
+    
+    pd_kpis = {
+        'Delivery Orders (DOs)': active_pd['DO_NO'].replace(['N/A', 'Unknown', 'nan'], np.nan).dropna().nunique(),
+        'Purchase Orders (POs)': active_pd['PO_NO'].replace(['N/A', 'Unknown', 'nan'], np.nan).dropna().nunique(),
+        'Parties Impacted': active_pd['CUSTOMER_NAME'].replace(['N/A', 'Unknown', 'nan'], np.nan).dropna().nunique(),
+        'Pending Line Items': len(active_pd),
+        'Total Pending Qty (MT)': active_pd['PENDING'].sum(),
+        'Est. Pending Value (₹)': (active_pd['PENDING'] * active_pd['PER_TON']).sum()
+    }
+    
+    st.subheader("📌 Pending Dispatch KPIs")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Pending DOs", f"{pd_kpis['Delivery Orders (DOs)']:,}")
+    c2.metric("Pending POs", f"{pd_kpis['Purchase Orders (POs)']:,}")
+    c3.metric("Parties Impacted", f"{pd_kpis['Parties Impacted']:,}")
+
+    c4, c5, c6 = st.columns(3)
+    c4.metric("Pending Items", f"{pd_kpis['Pending Line Items']:,}")
+    c5.metric("Total Pending Qty", f"{pd_kpis['Total Pending Qty (MT)']:,.2f} MT")
+    c6.metric("Est. Pending Value", f"₹{pd_kpis['Est. Pending Value (₹)']:,.2f}")
+    
+    st.markdown("---")
+    st.subheader("📊 Pending Quantity by Sales Person")
+    sp_pd_df = active_pd.groupby('SALES_EXECUTIVE')['PENDING'].sum().reset_index()
+    fig_pd = px.bar(sp_pd_df, x='SALES_EXECUTIVE', y='PENDING', title="Pending Dispatch Qty (MT) by Sales Person", text_auto=',.2f', color_discrete_sequence=['#EF4444'])
+    fig_pd.update_traces(textposition='outside')
+    st.plotly_chart(fig_pd, use_container_width=True)
+    
+    st.markdown("---")
+    st.subheader("📋 Pending Dispatch Detailed Data Table")
+    pending_details_df = active_pd[['PO_NO', 'DO_NO', 'SO_DATE_STR', 'CUSTOMER_NAME', 'SALES_EXECUTIVE', 'ITEM', 'THICKNESS_MM', 'SIZE_(MM)', 'SO_QTY_(MT)', 'DISP.QTY', 'PENDING', 'REMARK']].copy()
+    st.dataframe(pending_details_df, use_container_width=True)
