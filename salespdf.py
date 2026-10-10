@@ -72,7 +72,7 @@ def load_all_sheets(file_bytes: bytes) -> dict:
 
 
 def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean column names, standardise key fields, handle datetimes safely, and prevent PyArrow crashes."""
+    """Clean column names, standardise key fields, safely handle out-of-bounds dates, and prevent PyArrow crashes."""
     df = df.copy()
     df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
 
@@ -109,14 +109,21 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df[col] = 0.0
 
-    # Date conversion with boundary checks to prevent OutOfBoundsDatetime crashes
+    # Robust safe date parsing wrapper to completely prevent OutOfBoundsDatetime crashes
     for dcol in ["SO_DATE", "INVOICE_DATE"]:
         if dcol in df.columns:
-            s = pd.to_datetime(df[dcol], errors="coerce", dayfirst=True, format="mixed", utc=True)
-            s = s.dt.tz_localize(None)
-            # Restrict valid years between 2000 and 2100 to filter out corrupt/typo timestamps
-            mask = (s.dt.year >= 2000) & (s.dt.year <= 2100)
-            df[dcol] = s.where(mask, pd.NaT)
+            def parse_date_safely(val):
+                if pd.isna(val) or str(val).upper() in ("NAN", "NAT", "NONE", "", "0", "0.0"):
+                    return pd.NaT
+                try:
+                    dt = pd.to_datetime(val, errors="coerce", dayfirst=True)
+                    if pd.notna(dt):
+                        if 2000 <= dt.year <= 2100:
+                            return dt
+                except Exception:
+                    pass
+                return pd.NaT
+            df[dcol] = df[dcol].apply(parse_date_safely)
         else:
             df[dcol] = pd.NaT
 
@@ -185,7 +192,7 @@ def render_kpi_row(metrics: dict, key_prefix: str = ""):
                     </div>""",
                 unsafe_allow_html=True
             )
-            if st.button("View Details", key=f"{key_prefix}_{label}", use_container_width=True):
+            if st.button("View Details", key=f"{key_prefix}_{label}", width="stretch"):
                 selected = label
     return selected
 
@@ -270,7 +277,7 @@ if section == "Sales Analysis":
     if selected_kpi:
         st.markdown(f"### 🔍 Drill-down Report: **{selected_kpi}**")
         drill_df = drilldown_filter(df_main, selected_kpi)
-        st.dataframe(drill_df, use_container_width=True, height=300)
+        st.dataframe(drill_df, width="stretch", height=300)
         st.caption(f"Total Rows: {len(drill_df)}")
         st.markdown("---")
 
@@ -290,9 +297,9 @@ if section == "Sales Analysis":
         color_discrete_sequence=px.colors.qualitative.Set2
     )
     fig.update_traces(textinfo="percent+label")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
-    # Filters: Customer Name, SalesExecutive, ItemName, Thickness, Width, Grade, Status
+    # Filters
     st.markdown("---")
     st.markdown("#### 🔎 Multi-Select Filters")
     f1, f2, f3, f4, f5, f6, f7 = st.columns(7)
@@ -327,7 +334,7 @@ if section == "Sales Analysis":
         fig = px.bar(se_ordered, x="SALES_EXECUTIVE", y="SO_QTY_(MT)",
                      text="SO_QTY_(MT)", color="SALES_EXECUTIVE")
         fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     with colB:
         st.markdown("#### 📊 Sales Person Wise Dispatched Qty (Horizontal)")
@@ -336,7 +343,7 @@ if section == "Sales Analysis":
         fig = px.bar(se_disp, x="DISPATCH_QTY", y="SALES_EXECUTIVE",
                      orientation="h", text="DISPATCH_QTY", color="SALES_EXECUTIVE")
         fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # Executive Summary Table
     st.markdown("#### 📋 Sales Executive & Item-wise Summary Table")
@@ -359,7 +366,7 @@ if section == "Sales Analysis":
         summary = summary.merge(sc_map, on=["SALES_EXECUTIVE", "ITEM"], how="left")
         summary[["CancelQty", "SCQty"]] = summary[["CancelQty", "SCQty"]].fillna(0)
 
-        st.dataframe(summary, use_container_width=True)
+        st.dataframe(summary, width="stretch")
 
     # Top Parties Chart
     st.markdown("#### 🏆 Top Parties Performance Breakdown")
@@ -385,7 +392,7 @@ if section == "Sales Analysis":
                                    y=top_parties[col_name], text=top_parties[col_name],
                                    textposition="outside"))
         fig.update_layout(barmode="group", xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # Item Wise Analysis Table & Chart
     st.markdown("#### 🔩 Item Wise Analysis (Multi-Select Filters)")
@@ -423,7 +430,7 @@ if section == "Sales Analysis":
         item_summary[["Cancel", "SC"]] = item_summary[["Cancel", "SC"]].fillna(0)
 
         item_summary.rename(columns={"ITEM": "Itemname", "THIKNESS": "Thickness", "WIDTH": "Width"}, inplace=True)
-        st.dataframe(item_summary, use_container_width=True)
+        st.dataframe(item_summary, width="stretch")
 
         fig = px.bar(
             item_summary.melt(id_vars=["Itemname", "Thickness", "Width"],
@@ -432,7 +439,7 @@ if section == "Sales Analysis":
             x="Itemname", y="Qty", color="Metric", barmode="group", text="Qty"
         )
         fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 
 # ================= SECTION 2: DATE/MONTH/YEAR COMPARISON =================
@@ -510,7 +517,7 @@ elif section == "Date/Month/Year Comparison":
     for i, k in enumerate(kA):
         cols[i].metric(k, f"{kB[k]:,.2f}", delta=f"{kB[k] - kA[k]:,.2f}")
 
-    st.dataframe(comp_df, use_container_width=True)
+    st.dataframe(comp_df, width="stretch")
 
     kpi_names = list(kA.keys())
     fig = go.Figure()
@@ -519,13 +526,13 @@ elif section == "Date/Month/Year Comparison":
     fig.add_trace(go.Bar(name=labelB, x=kpi_names, y=[kB[k] for k in kpi_names],
                            text=[kB[k] for k in kpi_names], textposition="outside"))
     fig.update_layout(barmode="group", xaxis_tickangle=-30)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     st.markdown("#### 📈 Cumulative Order Qty Trend")
     trend = df_valid.groupby("SO_DATE")["SO_QTY_(MT)"].sum().reset_index()
     fig = px.line(trend, x="SO_DATE", y="SO_QTY_(MT)", markers=True, text="SO_QTY_(MT)")
     fig.update_traces(textposition="top center")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 # ================= SECTION 3: DISPATCH PENDING =================
@@ -544,7 +551,7 @@ elif section == "Dispatch Pending":
 
     if selected_dp_kpi:
         st.markdown(f"### 🔍 Dispatch Pending Drill-down: **{selected_dp_kpi}**")
-        st.dataframe(drilldown_filter(df_dispatch, selected_dp_kpi), use_container_width=True, height=300)
+        st.dataframe(drilldown_filter(df_dispatch, selected_dp_kpi), width="stretch", height=300)
         st.markdown("---")
 
     colA, colB = st.columns(2)
@@ -559,7 +566,7 @@ elif section == "Dispatch Pending":
         fig = px.pie(names=list(donut_data.keys()), values=list(donut_data.values()),
                      hole=0.55, color_discrete_sequence=px.colors.qualitative.Bold)
         fig.update_traces(textinfo="percent+label")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     with colB:
         st.markdown("#### 📊 Sales Executive Wise Pending Qty")
@@ -569,7 +576,7 @@ elif section == "Dispatch Pending":
             fig = px.bar(se_pending, x="PENDING", y="SALES_EXECUTIVE", orientation="h",
                          text="PENDING", color="SALES_EXECUTIVE")
             fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     st.markdown("#### 🏆 Top Customers with Pending Qty")
     if "CUSTOMER_NAME" in df_dispatch.columns:
@@ -579,10 +586,10 @@ elif section == "Dispatch Pending":
                      text="PENDING", color="CUSTOMER_NAME")
         fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
         fig.update_layout(xaxis_tickangle=-45, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown("#### 📋 Dispatch Pending Detail Table")
-    st.dataframe(df_dispatch, use_container_width=True, height=400)
+    st.dataframe(df_dispatch, width="stretch", height=400)
 
     csv = df_dispatch.to_csv(index=False).encode("utf-8")
     st.download_button("⬇️ Download Dispatch Pending CSV", csv,
