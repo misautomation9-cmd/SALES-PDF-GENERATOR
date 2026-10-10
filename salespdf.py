@@ -109,10 +109,10 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df[col] = 0.0
 
-    # Date conversion
+    # Date conversion with format='mixed' to prevent mixed-input errors
     for dcol in ["SO_DATE", "INVOICE_DATE"]:
         if dcol in df.columns:
-            df[dcol] = pd.to_datetime(df[dcol], errors="coerce", dayfirst=True)
+            df[dcol] = pd.to_datetime(df[dcol], errors="coerce", dayfirst=True, format="mixed")
         else:
             df[dcol] = pd.NaT
 
