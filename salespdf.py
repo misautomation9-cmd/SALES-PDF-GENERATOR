@@ -72,7 +72,6 @@ def load_and_clean_sheet(file_bytes, sheet_name):
     df = pd.read_excel(file_bytes, sheet_name=sheet_name, header=header_row_idx)
     df.columns = [str(c).strip() for c in df.columns]
     
-    # Remove duplicate columns safely to prevent DataFrame indexing errors
     df = df.loc[:, ~df.columns.duplicated()].copy()
     
     renamed_cols = {}
@@ -178,46 +177,6 @@ with st.sidebar:
 # ---------------------------------------------------------
 # Helper Chart & PDF Functions
 # ---------------------------------------------------------
-def make_pie_chart_bytes(labels, values, title):
-    fig, ax = plt.subplots(figsize=(6, 3.2), dpi=200)
-    valid_vals = [v if v > 0 else 0 for v in values]
-    if sum(valid_vals) == 0:
-        plt.close(fig)
-        return None
-    wedges, texts, autotexts = ax.pie(
-        valid_vals, labels=labels, autopct="%1.1f%%", startangle=90, 
-        colors=['#10B981', '#F59E0B', '#EF4444', '#6366F1']
-    )
-    for autotext in autotexts:
-        autotext.set_color('white')
-        autotext.set_weight('bold')
-        autotext.set_fontsize(8)
-    ax.set_title(title, fontsize=10, fontweight='bold', color='#1E3A8A', pad=10)
-    plt.tight_layout()
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight')
-    plt.close(fig)
-    buf.seek(0)
-    return buf
-
-def make_bar_chart_bytes(df_data, x_col, y_col, title, color='#2563EB'):
-    if df_data is None or df_data.empty:
-        return None
-    fig, ax = plt.subplots(figsize=(7, 3.5), dpi=200)
-    rects = ax.bar(df_data[x_col].astype(str), df_data[y_col], color=color, width=0.45)
-    ax.bar_label(rects, fmt='%.1f', padding=2, fontsize=6.5, fontweight='bold')
-    plt.xticks(rotation=35, ha='right', fontsize=6.5)
-    ax.set_title(title, fontsize=10, fontweight='bold', color='#1E3A8A', pad=10)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.grid(axis='y', linestyle='--', alpha=0.3)
-    plt.tight_layout()
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight')
-    plt.close(fig)
-    buf.seek(0)
-    return buf
-
 def generate_dashboard_pdf(sheet_name, kpis, chart_buffers, tables_dict):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
@@ -258,18 +217,7 @@ def generate_dashboard_pdf(sheet_name, kpis, chart_buffers, tables_dict):
         story.append(t_kpi)
         story.append(Spacer(1, 8))
 
-    if chart_buffers:
-        story.append(Paragraph("<b>2. Visual Analytics & Charts</b>", section_style))
-        for fig_title, buf in chart_buffers.items():
-            if buf is not None:
-                story.append(KeepTogether([
-                    Paragraph(f"<b>{fig_title}</b>", ParagraphStyle('SubHead', parent=styles['Normal'], fontSize=9, fontName="Helvetica-Bold", textColor=colors.HexColor('#1E40AF'))),
-                    Spacer(1, 2),
-                    Image(buf, width=520, height=220),
-                    Spacer(1, 6)
-                ]))
-
-    story.append(Paragraph("<b>3. Detailed Data Tables</b>", section_style))
+    story.append(Paragraph("<b>2. Detailed Data Tables</b>", section_style))
     for title, df_table in tables_dict.items():
         if df_table is not None and not df_table.empty:
             story.append(Paragraph(f"<b>{title}</b>", ParagraphStyle('THead', parent=styles['Normal'], fontSize=9, fontName="Helvetica-Bold", textColor=colors.HexColor('#1E3A8A'), spaceBefore=8, spaceAfter=4)))
@@ -297,7 +245,7 @@ def generate_dashboard_pdf(sheet_name, kpis, chart_buffers, tables_dict):
     return buffer.getvalue()
 
 # ---------------------------------------------------------
-# SECTION 1: DISPATCH ANALYSIS (WITH CUSTOMER & ITEM WISE)
+# SECTION 1: DISPATCH ANALYSIS
 # ---------------------------------------------------------
 if section == "1) Dispatch Analysis":
     st.header("📦 Dispatch Analysis & Monthly Performance")
@@ -330,34 +278,48 @@ if section == "1) Dispatch Analysis":
         'New Parties Added': new_customers_count
     }
 
-    st.subheader("📌 Key Performance Indicators (Click any metric card below to inspect details)")
+    st.subheader("📌 Key Performance Indicators (Click any metric button below to inspect details)")
     
     if 'active_kpi_drill' not in st.session_state:
         st.session_state.active_kpi_drill = None
 
+    # Custom wrapped button style for KPIs
+    st.markdown("""
+        <style>
+        .stButton>button {
+            width: 100%;
+            white-space: normal !important;
+            height: auto !important;
+            padding: 10px !important;
+            font-size: 13px !important;
+            text-align: center !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        if st.button(f"📌 PO Count\n\n{po_count:,}", use_container_width=True): st.session_state.active_kpi_drill = "PO"
+        if st.button(f"📌 PO Count\n\n{po_count:,}", key="kpi_po"): st.session_state.active_kpi_drill = "PO"
     with c2:
-        if st.button(f"📌 DO Count\n\n{do_count:,}", use_container_width=True): st.session_state.active_kpi_drill = "DO"
+        if st.button(f"📌 DO Count\n\n{do_count:,}", key="kpi_do"): st.session_state.active_kpi_drill = "DO"
     with c3:
-        if st.button(f"📌 Unique Parties\n\n{unique_parties:,}", use_container_width=True): st.session_state.active_kpi_drill = "PARTIES"
+        if st.button(f"📌 Unique Parties\n\n{unique_parties:,}", key="kpi_parties"): st.session_state.active_kpi_drill = "PARTIES"
     with c4:
-        if st.button(f"📌 Total SO Qty\n\n{sum_so_qty:,.2f} MT", use_container_width=True): st.session_state.active_kpi_drill = "SO_QTY"
+        if st.button(f"📌 Total SO Qty\n\n{sum_so_qty:,.2f} MT", key="kpi_so"): st.session_state.active_kpi_drill = "SO_QTY"
     with c5:
-        if st.button(f"📌 Total Amount\n\n₹{total_amount:,.0f}", use_container_width=True): st.session_state.active_kpi_drill = "AMOUNT"
+        if st.button(f"📌 Total Amount\n\n₹{total_amount:,.0f}", key="kpi_amt"): st.session_state.active_kpi_drill = "AMOUNT"
 
     c6, c7, c8, c9, c10 = st.columns(5)
     with c6:
-        if st.button(f"📌 Dispatched Qty\n\n{sum_disp_qty:,.2f} MT", use_container_width=True): st.session_state.active_kpi_drill = "DISP"
+        if st.button(f"📌 Dispatched Qty\n\n{sum_disp_qty:,.2f} MT", key="kpi_disp"): st.session_state.active_kpi_drill = "DISP"
     with c7:
-        if st.button(f"📌 Active Pending\n\n{sum_pending:,.2f} MT", use_container_width=True): st.session_state.active_kpi_drill = "PENDING"
+        if st.button(f"📌 Active Pending\n\n{sum_pending:,.2f} MT", key="kpi_pend"): st.session_state.active_kpi_drill = "PENDING"
     with c8:
-        if st.button(f"📌 Cancelled Qty\n\n{sum_cancelled:,.2f} MT", use_container_width=True): st.session_state.active_kpi_drill = "CANCEL"
+        if st.button(f"📌 Cancelled Qty\n\n{sum_cancelled:,.2f} MT", key="kpi_canc"): st.session_state.active_kpi_drill = "CANCEL"
     with c9:
-        if st.button(f"📌 Short Close Qty\n\n{sum_sc:,.2f} MT", use_container_width=True): st.session_state.active_kpi_drill = "SC"
+        if st.button(f"📌 Short Close\n\n{sum_sc:,.2f} MT", key="kpi_sc"): st.session_state.active_kpi_drill = "SC"
     with c10:
-        if st.button(f"📌 New Parties\n\n{new_customers_count}", use_container_width=True): st.session_state.active_kpi_drill = "NEW_PARTIES"
+        if st.button(f"📌 New Parties\n\n{new_customers_count}", key="kpi_new"): st.session_state.active_kpi_drill = "NEW_PARTIES"
 
     if st.session_state.active_kpi_drill:
         st.markdown(f"### 🔍 Detailed View: {st.session_state.active_kpi_drill}")
@@ -392,7 +354,7 @@ if section == "1) Dispatch Analysis":
     ).reset_index()
     st.dataframe(sp_item_grp, use_container_width=True)
 
-    # Customer & Item Wise Section (Integrated into Dispatch)
+    # Customer & Item Wise Section
     st.markdown("---")
     st.subheader("🏢 Customer Wise Detailed Table")
     cust_grp = df.groupby(['CUSTOMER_NAME', 'SALES_EXECUTIVE']).agg(
@@ -437,19 +399,15 @@ if section == "1) Dispatch Analysis":
 
     st.dataframe(filtered_spec, use_container_width=True)
 
-    st.markdown("---")
-    st.subheader("📥 Download Dispatch PDF Report")
-    pdf_data = generate_dashboard_pdf(selected_month, kpi_dict, {}, {"Customer Wise Summary": cust_grp})
-    st.download_button("📥 Download PDF Report", data=pdf_data, file_name=f"Dispatch_Report_{selected_month}.pdf", mime="application/pdf")
-
 # ---------------------------------------------------------
 # SECTION 2: DATE, MONTH & YEAR COMPARISON
 # ---------------------------------------------------------
 elif section == "2) Date, Month & Year Comparison":
-    st.header("⚖️ Date, Month & Year Wise Comparison")
+    st.header("⚖️ Flexible Date, Month & Year Comparison")
     
-    comp_mode = st.radio("Select Comparison Type", ["Date Wise", "Month Wise", "Year Wise"], horizontal=True)
+    comp_mode = st.radio("Select Comparison Level", ["Date Wise", "Month Wise", "Year Wise"], horizontal=True)
     
+    # Load master timeline dataset across all data sheets
     all_dfs = []
     for s_name in sheet_names:
         if 'pending' not in s_name.lower():
@@ -461,25 +419,40 @@ elif section == "2) Date, Month & Year Comparison":
     master_df['YEAR'] = master_df['SO_DATE'].dt.year.fillna(0).astype(int)
     master_df['DATE_STR'] = master_df['SO_DATE'].dt.strftime('%d/%m/%Y')
     
+    valid_months = [s for s in sheet_names if 'pending' not in s.lower()]
+    
     if comp_mode == "Date Wise":
-        valid_dates = sorted(master_df.dropna(subset=['SO_DATE'])['DATE_STR'].unique())
-        if not valid_dates:
-            st.warning("No valid dates found for comparison.")
-            st.stop()
-        c1, c2 = st.columns(2)
-        with c1: d1 = st.selectbox("Select Period 1 (Date)", valid_dates, index=0)
-        with c2: d2 = st.selectbox("Select Period 2 (Date)", valid_dates, index=min(1, len(valid_dates)-1))
+        sub_opt = st.radio("Select Date Source", ["Compare Dates Within a Month", "Compare Any Two Dates Across Workbook"], horizontal=True)
         
-        df1 = master_df[master_df['DATE_STR'] == d1]
-        df2 = master_df[master_df['DATE_STR'] == d2]
-        label1, label2 = d1, d2
-        
+        if sub_opt == "Compare Dates Within a Month":
+            chosen_month = st.selectbox("Select Month", valid_months)
+            month_df = load_and_clean_sheet(uploaded_file, chosen_month)
+            valid_dates = sorted(month_df.dropna(subset=['SO_DATE'])['SO_DATE_STR'].unique())
+            if not valid_dates:
+                st.warning("No valid dates found in this month.")
+                st.stop()
+            c1, c2 = st.columns(2)
+            with c1: d1 = st.selectbox("Period 1 Date", valid_dates, index=0)
+            with c2: d2 = st.selectbox("Period 2 Date", valid_dates, index=min(1, len(valid_dates)-1))
+            df1 = month_df[month_df['SO_DATE_STR'] == d1]
+            df2 = month_df[month_df['SO_DATE_STR'] == d2]
+            label1, label2 = f"{chosen_month} ({d1})", f"{chosen_month} ({d2})"
+        else:
+            valid_dates = sorted(master_df.dropna(subset=['SO_DATE'])['DATE_STR'].unique())
+            if not valid_dates:
+                st.warning("No valid dates found.")
+                st.stop()
+            c1, c2 = st.columns(2)
+            with c1: d1 = st.selectbox("Period 1 Date", valid_dates, index=0)
+            with c2: d2 = st.selectbox("Period 2 Date", valid_dates, index=min(1, len(valid_dates)-1))
+            df1 = master_df[master_df['DATE_STR'] == d1]
+            df2 = master_df[master_df['DATE_STR'] == d2]
+            label1, label2 = d1, d2
+            
     elif comp_mode == "Month Wise":
-        valid_months = [s for s in sheet_names if 'pending' not in s.lower()]
         c1, c2 = st.columns(2)
-        with c1: m1 = st.selectbox("Select Period 1 (Month/Sheet)", valid_months, index=0)
-        with c2: m2 = st.selectbox("Select Period 2 (Month/Sheet)", valid_months, index=min(1, len(valid_months)-1))
-        
+        with c1: m1 = st.selectbox("Period 1 Month", valid_months, index=0)
+        with c2: m2 = st.selectbox("Period 2 Month", valid_months, index=min(1, len(valid_months)-1))
         df1 = load_and_clean_sheet(uploaded_file, m1)
         df2 = load_and_clean_sheet(uploaded_file, m2)
         label1, label2 = m1, m2
@@ -487,12 +460,11 @@ elif section == "2) Date, Month & Year Comparison":
     else: # Year Wise
         valid_years = sorted([y for y in master_df['YEAR'].unique() if y > 2000])
         if not valid_years:
-            st.warning("No valid years found for comparison.")
+            st.warning("No valid years found.")
             st.stop()
         c1, c2 = st.columns(2)
-        with c1: y1 = st.selectbox("Select Period 1 (Year)", valid_years, index=0)
-        with c2: y2 = st.selectbox("Select Period 2 (Year)", valid_years, index=min(1, len(valid_years)-1))
-        
+        with c1: y1 = st.selectbox("Period 1 Year", valid_years, index=0)
+        with c2: y2 = st.selectbox("Period 2 Year", valid_years, index=min(1, len(valid_years)-1))
         df1 = master_df[master_df['YEAR'] == y1]
         df2 = master_df[master_df['YEAR'] == y2]
         label1, label2 = str(y1), str(y2)
@@ -530,7 +502,7 @@ elif section == "2) Date, Month & Year Comparison":
     
     fig_comp = go.Figure(data=[
         go.Bar(name=str(label1), x=list(kpi1.keys()), y=list(kpi1.values()), text=[f"{v:,.1f}" for v in kpi1.values()], textposition='outside'),
-        go.Bar(name=str(label2), x=list(kpi2.keys()), y=list(kpi2.values()), text=[f"{v:,.1f}" for v in kpi2.values()], textposition='outside')
+        go.Bar(name=str(label2), x=list(kpi1.keys()), y=list(kpi2.values()), text=[f"{v:,.1f}" for v in kpi2.values()], textposition='outside')
     ])
     fig_comp.update_layout(barmode='group', title=f"Performance Comparison: {label1} vs {label2}")
     st.plotly_chart(fig_comp, use_container_width=True)
@@ -539,7 +511,7 @@ elif section == "2) Date, Month & Year Comparison":
 # SECTION 3: PENDING DISPATCH REPORT
 # ---------------------------------------------------------
 elif section == "3) Pending Dispatch Report":
-    st.header("🚚 Pending Dispatch Report")
+    st.header("🚚 Pending Dispatch Standalone Report")
     
     pd_sheet_candidates = [s for s in sheet_names if 'pending' in s.lower() and 'dispatch' in s.lower()]
     target_pd_sheet = pd_sheet_candidates[0] if pd_sheet_candidates else (sheet_names[-1] if sheet_names else None)
