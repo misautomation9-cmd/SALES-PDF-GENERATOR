@@ -72,7 +72,7 @@ def load_all_sheets(file_bytes: bytes) -> dict:
 
 
 def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean column names and standardise key fields."""
+    """Clean column names, standardise key fields, handle datetimes safely with UTC, and cast mixed types."""
     df = df.copy()
     df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
 
@@ -109,30 +109,33 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df[col] = 0.0
 
-    # Date conversion with format='mixed' to prevent mixed-input errors
+    # Date conversion with utc=True to avoid mixed timezone/parsing crashes
     for dcol in ["SO_DATE", "INVOICE_DATE"]:
         if dcol in df.columns:
-            df[dcol] = pd.to_datetime(df[dcol], errors="coerce", dayfirst=True, format="mixed")
+            df[dcol] = pd.to_datetime(df[dcol], errors="coerce", dayfirst=True, utc=True)
+            df[dcol] = df[dcol].dt.tz_localize(None)
         else:
             df[dcol] = pd.NaT
 
     # Total amount
     df["TOTAL_AMOUNT"] = df["SO_QTY_(MT)"] * df["PER_TON"]
 
-    # Uppercase string columns
-    for col in ["STATUS", "REMARK", "CUSTOMER_NAME", "SALES_EXECUTIVE", "ITEM",
-                "GRADE", "SECTOR", "PLACE", "BROKER", "DISPATCH_THROUGH"]:
+    # Uppercase string columns & prevent PyArrow mixed-type serialization errors
+    str_cols = [
+        "STATUS", "REMARK", "CUSTOMER_NAME", "SALES_EXECUTIVE", "ITEM",
+        "GRADE", "SECTOR", "PLACE", "BROKER", "DISPATCH_THROUGH", "THIKNESS", "PO_NO", "S_NO"
+    ]
+    for col in str_cols:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().str.upper()
-            df[col] = df[col].replace({"NAN": "", "NONE": ""})
+            df[col] = df[col].replace({"NAN": "", "NONE": "", "<NA>": "", "NAT": ""})
         else:
             df[col] = ""
 
     # Extract width from SIZE_(MM) — e.g., "1250X5635" → Width = 1250
     if "SIZE_(MM)" in df.columns:
         df["WIDTH"] = (
-            df["SIZE_(MM)"].astype(str)
-            .str.upper()
+            df["SIZE_(MM)"]
             .str.extract(r"(\d+)\s*X", expand=False)
         )
         df["WIDTH"] = pd.to_numeric(df["WIDTH"], errors="coerce").fillna(0)
@@ -437,7 +440,6 @@ if section == "Sales Analysis":
 elif section == "Date/Month/Year Comparison":
     st.subheader("📅 Date / Month / Year Comparison")
 
-    # Combine all sheets to build comprehensive timeline
     dfs = [read_sheet(s) for s in sheet_names if "pending" not in s.lower() or "dispatch" not in s.lower()]
     df_all = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
