@@ -611,7 +611,7 @@ elif section == "Dispatch Pending":
                           .sum().reset_index().sort_values("PENDING", ascending=True))
             fig = px.bar(se_pending, x="PENDING", y="SALES_EXECUTIVE", orientation="h",
                          text="PENDING", color="SALES_EXECUTIVE")
-            fig.update_traces(textposition="%{text:.1f}", textposition="outside")
+            fig.update_traces(textposition="outside")
             st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("#### 🏆 Top Customers with Pending Qty")
@@ -620,7 +620,7 @@ elif section == "Dispatch Pending":
                         .sum().reset_index().sort_values("PENDING", ascending=False).head(15))
         fig = px.bar(cust_pending, x="CUSTOMER_NAME", y="PENDING",
                      text="PENDING", color="CUSTOMER_NAME")
-        fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+        fig.update_traces(textposition="outside")
         fig.update_layout(xaxis_tickangle=-45, showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
