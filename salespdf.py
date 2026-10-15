@@ -82,7 +82,6 @@ def load_all_sheets(file_bytes: bytes) -> dict:
     sheets = {}
     for name in xls.sheet_names:
         try:
-            df_test = None
             header_row_idx = 0
             max_matches = 0
             df_raw = pd.read_excel(xls, sheet_name=name, header=None)
@@ -107,6 +106,10 @@ def load_all_sheets(file_bytes: bytes) -> dict:
 def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Clean column names, standardise key fields, safely handle out-of-bounds dates, and prevent PyArrow crashes."""
     df = df.copy()
+    
+    # Drop duplicate columns to prevent DataFrame indexing issues
+    df = df.loc[:, ~df.columns.duplicated()]
+    
     df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
 
     renamed_cols = {}
@@ -126,10 +129,13 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
         if std_col not in df.columns:
             df[std_col] = np.nan
 
-    # Numeric conversions
+    # Numeric conversions (ensuring Series representation)
     for col in ["SO_QTY_(MT)", "PER_TON", "DISPATCH_QTY", "PENDING"]:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors="coerce").fillna(0)
+            series = df[col]
+            if isinstance(series, pd.DataFrame):
+                series = series.iloc[:, 0]
+            df[col] = pd.to_numeric(series.astype(str).str.replace(',', ''), errors="coerce").fillna(0)
         else:
             df[col] = 0.0
 
@@ -139,7 +145,10 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
     # Robust date cleaning & parsing
     for dcol in ["SO_DATE", "INVOICE_DATE"]:
         if dcol in df.columns:
-            date_clean = df[dcol].astype(str).str.replace('.', '/', regex=False)
+            series = df[dcol]
+            if isinstance(series, pd.DataFrame):
+                series = series.iloc[:, 0]
+            date_clean = series.astype(str).str.replace('.', '/', regex=False)
             def parse_date_safely(val):
                 if pd.isna(val) or str(val).upper() in ("NAN", "NAT", "NONE", "", "0", "0.0", "N/A"):
                     return pd.NaT
@@ -161,7 +170,10 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
     ]
     for col in str_cols:
         if col in df.columns:
-            df[col] = df[col].fillna("N/A").astype(str).str.strip().str.upper()
+            series = df[col]
+            if isinstance(series, pd.DataFrame):
+                series = series.iloc[:, 0]
+            df[col] = series.fillna("N/A").astype(str).str.strip().str.upper()
             df[col] = df[col].replace({"NAN": "N/A", "NONE": "N/A", "<NA>": "N/A", "NAT": "N/A"})
         else:
             df[col] = "N/A"
@@ -177,7 +189,10 @@ def normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
         return float(num[0]) if num else 0.0
 
     if "SIZE_(MM)" in df.columns:
-        df["WIDTH"] = df["SIZE_(MM)"].apply(parse_width)
+        series = df["SIZE_(MM)"]
+        if isinstance(series, pd.DataFrame):
+            series = series.iloc[:, 0]
+        df["WIDTH"] = series.apply(parse_width)
     else:
         df["WIDTH"] = 0.0
 
