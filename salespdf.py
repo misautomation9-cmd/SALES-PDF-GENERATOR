@@ -450,8 +450,21 @@ if section == "Sales Analysis":
 elif section == "Date/Month/Year Comparison":
     st.subheader("📅 Date / Month / Year Comparison")
 
-    dfs = [read_sheet(s) for s in sheet_names if "pending" not in s.lower() or "dispatch" not in s.lower()]
-    df_all = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+    # Combine data safely from all relevant month sheets
+    @st.cache_data
+    def load_combined_data(file_bytes_cache):
+        sheets_dict = load_all_sheets(file_bytes_cache)
+        combined_list = []
+        for s_name, s_df in sheets_dict.items():
+            if "pending" not in s_name.lower() or "dispatch" not in s_name.lower():
+                cleaned = normalise_columns(s_df)
+                if not cleaned.empty:
+                    combined_list.append(cleaned)
+        if combined_list:
+            return pd.concat(combined_list, ignore_index=True)
+        return pd.DataFrame()
+
+    df_all = load_combined_data(file_bytes)
 
     df_valid = df_all.dropna(subset=["SO_DATE"]).copy()
     if df_valid.empty:
@@ -482,10 +495,9 @@ elif section == "Date/Month/Year Comparison":
     col1, col2 = st.columns(2)
 
     if mode == "Compare Two Dates":
-        min_d = df_valid["SO_DATE"].min().date()
-        max_d = df_valid["SO_DATE"].max().date()
-        d1 = col1.date_input("Date A", value=min_d, min_value=min_d, max_value=max_d)
-        d2 = col2.date_input("Date B", value=max_d, min_value=min_d, max_value=max_d)
+        unique_dates_sorted = sorted(df_valid["DATE"].unique())
+        d1 = col1.selectbox("Date A", unique_dates_sorted, index=0)
+        d2 = col2.selectbox("Date B", unique_dates_sorted, index=min(1, len(unique_dates_sorted)-1))
         dfA = df_valid[df_valid["DATE"] == d1]
         dfB = df_valid[df_valid["DATE"] == d2]
         labelA, labelB = str(d1), str(d2)
@@ -495,11 +507,11 @@ elif section == "Date/Month/Year Comparison":
         c1, c2 = col1.columns(2)
         y1 = c1.selectbox("Year A", years, index=0)
         m1 = c2.selectbox("Month A", range(1, 13),
-                          format_func=lambda m: datetime(2000, m, 1).strftime("%B"))
+                          format_func=lambda m: datetime(2000, m, 1).strftime("%B"), key="m_a")
         c3, c4 = col2.columns(2)
         y2 = c3.selectbox("Year B", years, index=len(years) - 1)
         m2 = c4.selectbox("Month B", range(1, 13), index=0,
-                          format_func=lambda m: datetime(2000, m, 1).strftime("%B"))
+                          format_func=lambda m: datetime(2000, m, 1).strftime("%B"), key="m_b")
         dfA = df_valid[(df_valid["YEAR"] == y1) & (df_valid["MONTH"] == m1)]
         dfB = df_valid[(df_valid["YEAR"] == y2) & (df_valid["MONTH"] == m2)]
         labelA = f"{datetime(2000, m1, 1).strftime('%b')}-{y1}"
@@ -507,8 +519,8 @@ elif section == "Date/Month/Year Comparison":
 
     else:  # Two Years
         years = sorted(df_valid["YEAR"].unique())
-        y1 = col1.selectbox("Year A", years, index=0)
-        y2 = col2.selectbox("Year B", years, index=len(years) - 1)
+        y1 = col1.selectbox("Year A", years, index=0, key="yr_a")
+        y2 = col2.selectbox("Year B", years, index=min(1, len(years) - 1), key="yr_b")
         dfA = df_valid[df_valid["YEAR"] == y1]
         dfB = df_valid[df_valid["YEAR"] == y2]
         labelA, labelB = str(y1), str(y2)
