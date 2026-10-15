@@ -120,7 +120,7 @@ def load_and_clean_sheet(file_bytes, sheet_name):
     df['IS_OK'] = df['STATUS'].str.lower().str.contains('ok') | df['REMARK'].str.lower().str.contains('ok')
     
     df['CANCELLED_QTY'] = np.where(df['IS_CANCELLED'], df['PO QTY (MT)'], 0.0)
-    # Exclude both cancelled and status/remark containing 'OK' from Active Pending
+    # Exclude both cancelled and 'OK' items from Active Pending Qty
     df['ACTIVE_PENDING_QTY'] = np.where(df['IS_CANCELLED'] | df['IS_OK'], 0.0, df['PENDING'])
 
     def parse_width(size_val):
