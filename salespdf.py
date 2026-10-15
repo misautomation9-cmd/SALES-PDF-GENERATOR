@@ -450,7 +450,6 @@ if section == "Sales Analysis":
 elif section == "Date/Month/Year Comparison":
     st.subheader("📅 Date / Month / Year Comparison")
 
-    # Combine data safely from all relevant month sheets
     @st.cache_data
     def load_combined_data(file_bytes_cache):
         sheets_dict = load_all_sheets(file_bytes_cache)
@@ -465,19 +464,11 @@ elif section == "Date/Month/Year Comparison":
         return pd.DataFrame()
 
     df_all = load_combined_data(file_bytes)
+    sales_sheets = [s for s in sheet_names if "pending" not in s.lower() or "dispatch" not in s.lower()]
 
-    df_valid = df_all.dropna(subset=["SO_DATE"]).copy()
-    if df_valid.empty:
-        st.warning("No valid SO_DATE entries found across sheets.")
-        st.stop()
-
-    df_valid["YEAR"] = df_valid["SO_DATE"].dt.year
-    df_valid["MONTH"] = df_valid["SO_DATE"].dt.month
-    df_valid["DATE"] = df_valid["SO_DATE"].dt.date
-
-    mode = st.radio(
-        "Select Comparison Mode",
-        ["Compare Two Dates", "Compare Two Months", "Compare Two Years"],
+    comparison_mode = st.radio(
+        "Select Comparison Scope",
+        ["Compare Within Selected Month", "Compare Within Selected Year", "Compare Across Years"],
         horizontal=True
     )
 
@@ -494,35 +485,64 @@ elif section == "Date/Month/Year Comparison":
 
     col1, col2 = st.columns(2)
 
-    if mode == "Compare Two Dates":
-        unique_dates_sorted = sorted(df_valid["DATE"].unique())
-        d1 = col1.selectbox("Date A", unique_dates_sorted, index=0)
-        d2 = col2.selectbox("Date B", unique_dates_sorted, index=min(1, len(unique_dates_sorted)-1))
-        dfA = df_valid[df_valid["DATE"] == d1]
-        dfB = df_valid[df_valid["DATE"] == d2]
+    if comparison_mode == "Compare Within Selected Month":
+        chosen_sheet = st.selectbox("Select Month / Sheet to Compare Within", sales_sheets)
+        df_sheet = read_sheet(chosen_sheet)
+        df_valid_sheet = df_sheet.dropna(subset=["SO_DATE"]).copy()
+
+        if df_valid_sheet.empty:
+            st.warning(f"No valid dates found in sheet: {chosen_sheet}")
+            st.stop()
+
+        df_valid_sheet["DATE"] = df_valid_sheet["SO_DATE"].dt.date
+        unique_dates = sorted(df_valid_sheet["DATE"].unique())
+
+        d1 = col1.selectbox("Date A", unique_dates, index=0, key="date_a")
+        d2 = col2.selectbox("Date B", unique_dates, index=min(1, len(unique_dates) - 1), key="date_b")
+
+        dfA = df_valid_sheet[df_valid_sheet["DATE"] == d1]
+        dfB = df_valid_sheet[df_valid_sheet["DATE"] == d2]
         labelA, labelB = str(d1), str(d2)
 
-    elif mode == "Compare Two Months":
-        years = sorted(df_valid["YEAR"].unique())
-        c1, c2 = col1.columns(2)
-        y1 = c1.selectbox("Year A", years, index=0)
-        m1 = c2.selectbox("Month A", range(1, 13),
-                          format_func=lambda m: datetime(2000, m, 1).strftime("%B"), key="m_a")
-        c3, c4 = col2.columns(2)
-        y2 = c3.selectbox("Year B", years, index=len(years) - 1)
-        m2 = c4.selectbox("Month B", range(1, 13), index=0,
-                          format_func=lambda m: datetime(2000, m, 1).strftime("%B"), key="m_b")
-        dfA = df_valid[(df_valid["YEAR"] == y1) & (df_valid["MONTH"] == m1)]
-        dfB = df_valid[(df_valid["YEAR"] == y2) & (df_valid["MONTH"] == m2)]
-        labelA = f"{datetime(2000, m1, 1).strftime('%b')}-{y1}"
-        labelB = f"{datetime(2000, m2, 1).strftime('%b')}-{y2}"
+    elif comparison_mode == "Compare Within Selected Year":
+        df_valid_all = df_all.dropna(subset=["SO_DATE"]).copy()
+        if df_valid_all.empty:
+            st.warning("No valid dates found across sheets.")
+            st.stop()
 
-    else:  # Two Years
-        years = sorted(df_valid["YEAR"].unique())
-        y1 = col1.selectbox("Year A", years, index=0, key="yr_a")
-        y2 = col2.selectbox("Year B", years, index=min(1, len(years) - 1), key="yr_b")
-        dfA = df_valid[df_valid["YEAR"] == y1]
-        dfB = df_valid[df_valid["YEAR"] == y2]
+        df_valid_all["YEAR"] = df_valid_all["SO_DATE"].dt.year
+        df_valid_all["MONTH"] = df_valid_all["SO_DATE"].dt.month
+
+        available_years = sorted(df_valid_all["YEAR"].unique())
+        selected_year = st.selectbox("Select Year", available_years)
+
+        df_year = df_valid_all[df_valid_all["YEAR"] == selected_year]
+        available_months = sorted(df_year["MONTH"].unique())
+
+        month_options = {m: datetime(2000, m, 1).strftime("%B") for m in available_months}
+
+        m1 = col1.selectbox("Month A", available_months, format_func=lambda m: month_options[m], key="month_a")
+        m2 = col2.selectbox("Month B", available_months, index=min(1, len(available_months)-1), format_func=lambda m: month_options[m], key="month_b")
+
+        dfA = df_year[df_year["MONTH"] == m1]
+        dfB = df_year[df_year["MONTH"] == m2]
+        labelA = f"{month_options[m1]} {selected_year}"
+        labelB = f"{month_options[m2]} {selected_year}"
+
+    else:  # Compare Across Years
+        df_valid_all = df_all.dropna(subset=["SO_DATE"]).copy()
+        if df_valid_all.empty:
+            st.warning("No valid dates found across sheets.")
+            st.stop()
+
+        df_valid_all["YEAR"] = df_valid_all["SO_DATE"].dt.year
+        available_years = sorted(df_valid_all["YEAR"].unique())
+
+        y1 = col1.selectbox("Year A", available_years, index=0, key="yr_a")
+        y2 = col2.selectbox("Year B", available_years, index=min(1, len(available_years) - 1), key="yr_b")
+
+        dfA = df_valid_all[df_valid_all["YEAR"] == y1]
+        dfB = df_valid_all[df_valid_all["YEAR"] == y2]
         labelA, labelB = str(y1), str(y2)
 
     st.markdown("---")
@@ -545,7 +565,7 @@ elif section == "Date/Month/Year Comparison":
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("#### 📈 Cumulative Order Qty Trend")
-    trend = df_valid.groupby("SO_DATE")["SO_QTY_(MT)"].sum().reset_index()
+    trend = df_all.dropna(subset=["SO_DATE"]).groupby("SO_DATE")["SO_QTY_(MT)"].sum().reset_index()
     fig = px.line(trend, x="SO_DATE", y="SO_QTY_(MT)", markers=True, text="SO_QTY_(MT)")
     fig.update_traces(textposition="top center")
     st.plotly_chart(fig, use_container_width=True)
@@ -591,7 +611,7 @@ elif section == "Dispatch Pending":
                           .sum().reset_index().sort_values("PENDING", ascending=True))
             fig = px.bar(se_pending, x="PENDING", y="SALES_EXECUTIVE", orientation="h",
                          text="PENDING", color="SALES_EXECUTIVE")
-            fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+            fig.update_traces(textposition="%{text:.1f}", textposition="outside")
             st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("#### 🏆 Top Customers with Pending Qty")
